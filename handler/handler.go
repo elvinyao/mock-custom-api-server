@@ -30,14 +30,40 @@ func NewMockHandler(cfgManager *config.ConfigManager) *MockHandler {
 
 // RegisterRoutes registers all endpoint routes from config
 func (h *MockHandler) RegisterRoutes(r *gin.Engine) {
-	// Use a catch-all handler that dynamically matches based on config
-	r.NoRoute(h.handleRequest)
-
-	// Also register specific methods to catch them before NoRoute
-	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"}
-	for _, method := range methods {
-		r.Handle(method, "/*path", h.handleRequest)
+	cfg := h.configManager.GetConfig()
+	if cfg == nil {
+		return
 	}
+
+	// Register each endpoint path individually to avoid wildcard conflicts
+	for _, ep := range cfg.Endpoints {
+		path := ep.Path
+		method := strings.ToUpper(ep.Method)
+
+		switch method {
+		case "GET":
+			r.GET(path, h.handleRequest)
+		case "POST":
+			r.POST(path, h.handleRequest)
+		case "PUT":
+			r.PUT(path, h.handleRequest)
+		case "DELETE":
+			r.DELETE(path, h.handleRequest)
+		case "PATCH":
+			r.PATCH(path, h.handleRequest)
+		case "OPTIONS":
+			r.OPTIONS(path, h.handleRequest)
+		case "HEAD":
+			r.HEAD(path, h.handleRequest)
+		default:
+			r.Handle(method, path, h.handleRequest)
+		}
+	}
+
+	// Set NoRoute handler for 404
+	r.NoRoute(func(c *gin.Context) {
+		h.handleNotFound(c, h.configManager.GetConfig())
+	})
 }
 
 // handleRequest handles incoming requests and matches against config endpoints
