@@ -1,0 +1,10 @@
+{
+    "status": "pending",
+    "order_id": "unknown",
+    "payment": {
+        "amount": 0,
+        "currency": "USD",
+        "method": "unknown"
+    },
+    "message": "Order is being processed. Please check back later."
+}

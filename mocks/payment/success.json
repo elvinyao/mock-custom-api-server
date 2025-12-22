@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "order_id": "1001",
+  "payment": {
+    "amount": 199.99,
+    "currency": "USD",
+    "method": "credit_card",
+    "transaction_id": "TXN_20240115_001"
+  },
+  "message": "Payment completed successfully"
+}

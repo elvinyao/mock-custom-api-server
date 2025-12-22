@@ -1,0 +1,17 @@
+{
+    "status": "success",
+    "order_id": "VIP_XXXXX",
+    "payment": {
+        "amount": 999.99,
+        "currency": "USD",
+        "method": "premium_account",
+        "transaction_id": "VIP_TXN_20240115_001",
+        "discount_applied": 15,
+        "vip_benefits": [
+            "free_shipping",
+            "priority_processing",
+            "extended_warranty"
+        ]
+    },
+    "message": "VIP payment completed with premium benefits"
+}

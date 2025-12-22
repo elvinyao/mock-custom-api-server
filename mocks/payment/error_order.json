@@ -1,0 +1,11 @@
+{
+    "status": "error",
+    "error": {
+        "code": "INVALID_ORDER",
+        "message": "The order ID format is invalid or the order has been cancelled",
+        "details": {
+            "pattern": "ERR_XXXX",
+            "suggestion": "Please check your order ID and try again"
+        }
+    }
+}

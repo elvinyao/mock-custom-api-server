@@ -1,0 +1,12 @@
+{
+    "status": "failed",
+    "order_id": "1002",
+    "error": {
+        "code": "PAYMENT_DECLINED",
+        "message": "Payment was declined by the issuing bank",
+        "details": {
+            "reason": "insufficient_funds",
+            "retry_allowed": true
+        }
+    }
+}

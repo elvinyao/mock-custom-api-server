@@ -1,0 +1,8 @@
+{
+    "status": "timeout",
+    "error": {
+        "code": "GATEWAY_TIMEOUT",
+        "message": "The request timed out",
+        "details": "Upstream service did not respond in time"
+    }
+}

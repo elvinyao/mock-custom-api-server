@@ -1,0 +1,12 @@
+{
+    "user": {
+        "id": "guest",
+        "username": "guest",
+        "email": null,
+        "role": "guest",
+        "permissions": [
+            "read"
+        ],
+        "created_at": null
+    }
+}

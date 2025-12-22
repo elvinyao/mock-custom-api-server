@@ -1,0 +1,14 @@
+{
+    "user": {
+        "id": "test_user",
+        "username": "test_user",
+        "email": "test@example.com",
+        "role": "tester",
+        "permissions": [
+            "read",
+            "write"
+        ],
+        "is_test_account": true,
+        "created_at": "2024-01-15T00:00:00Z"
+    }
+}

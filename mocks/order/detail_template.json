@@ -1,0 +1,17 @@
+{
+    "order": {
+        "id": "{{.order_id}}",
+        "status": "confirmed",
+        "items": [
+            {
+                "name": "Sample Product",
+                "quantity": 1,
+                "price": 99.99
+            }
+        ],
+        "total": 99.99,
+        "currency": "USD",
+        "created_at": "{{.timestamp}}",
+        "tracking_id": "{{.uuid}}"
+    }
+}

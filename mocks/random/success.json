@@ -1,0 +1,8 @@
+{
+    "status": "success",
+    "message": "Service is operating normally",
+    "data": {
+        "uptime": "99.9%",
+        "response_time": "45ms"
+    }
+}
