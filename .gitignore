@@ -7,6 +7,10 @@
 *.dll
 *.so
 *.dylib
+__debug_bin
+__debug_bin*
+mock-api-server
+mock-api-server*
 
 # Test binary, built with `go test -c`
 *.test
