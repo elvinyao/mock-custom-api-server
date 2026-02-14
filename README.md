@@ -41,159 +41,67 @@ graph TD
 
 ## 3. 配置文件设计 (Configuration Schema)
 
-配置文件采用 YAML 格式。核心在于 `endpoints` 的定义，每个 Endpoint 必须包含 `selectors`（取值逻辑）、`rules`（匹配逻辑）和 `default`（兜底逻辑）。
+配置文件采用 YAML 格式。主 `config.yaml` 中 `endpoints` 只维护外部 endpoint 配置文件路径；每个 endpoint 文件内再定义 `selectors`（取值逻辑）、`rules`（匹配逻辑）和 `default`（兜底逻辑）。
 
 ### 3.1 示例配置文件 (`config.yaml`)
 
 ```yaml
 server:
   port: 8080
-  hot_reload: true              # 启用配置热加载
-  reload_interval_sec: 5        # 热加载检查间隔（秒）
-  
-  # 日志配置
+  hot_reload: true
+  reload_interval_sec: 5
   logging:
-    level: "info"               # debug, info, warn, error
-    access_log: true            # 是否记录访问日志
-    log_format: "json"          # json, text
-    log_file: "./logs/server.log"  # 可选：日志文件路径，不配置则输出到 stdout
-
-  # 错误处理配置
+    level: "info"
+    access_log: true
+    log_format: "json"
   error_handling:
-    show_details: true          # 是否在响应中显示错误详情（开发环境建议开启）
+    show_details: true
     custom_error_responses:
       404: "./mocks/errors/not_found.json"
       500: "./mocks/errors/internal_error.json"
 
-# 健康检查端点（内置）
 health_check:
   enabled: true
   path: "/health"
 
+# endpoints 只负责声明外部配置文件路径
 endpoints:
-  # 示例 1: 支付状态查询接口 (多条件匹配 + 正则表达式)
+  config_paths:
+    - "./config/endpoints/holiday.yaml"
+    - "./config/endpoints/business_apis.yaml"
+```
+
+`config/endpoints/holiday.yaml`（单个 path）:
+
+```yaml
+path: "/is_holiday"
+method: "GET"
+selectors:
+  - name: "date"
+    type: "query"
+    key: "date"
+rules:
+  - conditions:
+      - selector: "date"
+        match_type: "exact"
+        value: "2026-01-01"
+    response_file: "./mocks/holiday/is_holiday_true.json"
+    status_code: 200
+default:
+  response_file: "./mocks/holiday/is_holiday_false.json"
+  status_code: 200
+```
+
+`config/endpoints/business_apis.yaml`（多个 path）:
+
+```yaml
+paths:
   - path: "/api/v1/payment/status"
     method: "POST"
-    description: "根据订单ID和用户类型返回不同的支付结果"
-    
-    # 1. 取值选择器：支持多个字段组合判断
-    selectors:
-      - name: "order_id"
-        type: "body"              # 可选: body (json), header, query, path
-        key: "order_id"           # json path 或 header/query key
-      - name: "user_type"
-        type: "header"
-        key: "X-User-Type"
-    
-    # 2. 匹配规则：支持多种匹配模式
-    rules:
-      # 精确匹配
-      - conditions:
-          - selector: "order_id"
-            match_type: "exact"   # exact, prefix, suffix, regex, range
-            value: "1001"
-        response_file: "./mocks/payment/success.json"
-        status_code: 200
-        
-      # 正则表达式匹配
-      - conditions:
-          - selector: "order_id"
-            match_type: "regex"
-            value: "^ERR_[0-9]{4}$"   # 匹配 ERR_0001 格式
-        response_file: "./mocks/payment/error_order.json"
-        status_code: 400
-        
-      # 多条件组合匹配 (AND 逻辑)
-      - conditions:
-          - selector: "order_id"
-            match_type: "prefix"
-            value: "VIP_"
-          - selector: "user_type"
-            match_type: "exact"
-            value: "premium"
-        response_file: "./mocks/payment/vip_success.json"
-        status_code: 200
-        headers:                   # 自定义响应头
-          X-VIP-Status: "active"
-          X-Priority: "high"
-
-    # 3. 默认兜底策略 (必填)
-    default:
-      response_file: "./mocks/payment/default.json"
-      status_code: 200
-      delay_ms: 0
-      headers:
-        X-Mock-Server: "true"
-
-  # 示例 2: 用户信息 (路径参数 + Query 参数)
-  - path: "/api/v1/user/:user_id"   # 支持路径参数
+    # ...
+  - path: "/api/v1/user/:user_id"
     method: "GET"
-    description: "根据用户ID和类型返回用户信息"
-    selectors:
-      - name: "user_id"
-        type: "path"               # 从路径中提取参数
-        key: "user_id"
-      - name: "user_type"
-        type: "query"
-        key: "type"                # URL?type=admin
-    rules:
-      - conditions:
-          - selector: "user_type"
-            match_type: "exact"
-            value: "admin"
-        response_file: "./mocks/user/admin.json"
-        status_code: 200
-        
-      # 范围匹配（数值场景）
-      - conditions:
-          - selector: "user_id"
-            match_type: "range"
-            value: "[1, 100]"      # user_id 在 1-100 之间
-        response_file: "./mocks/user/test_user.json"
-        status_code: 200
-        
-    default:
-      response_file: "./mocks/user/guest.json"
-      status_code: 200
-
-  # 示例 3: 动态响应模板
-  - path: "/api/v1/order/:order_id"
-    method: "GET"
-    selectors:
-      - name: "order_id"
-        type: "path"
-        key: "order_id"
-    rules: []
-    default:
-      response_file: "./mocks/order/detail_template.json"
-      status_code: 200
-      template:                    # 响应模板配置
-        enabled: true
-        variables:                 # 内置变量 + 自定义变量
-          - "{{.order_id}}"        # 来自 selector
-          - "{{.timestamp}}"       # 内置：当前时间戳
-          - "{{.uuid}}"            # 内置：生成 UUID
-
-  # 示例 4: 随机响应（测试场景）
-  - path: "/api/v1/random/status"
-    method: "GET"
-    selectors: []
-    rules: []
-    default:
-      random_responses:            # 随机响应配置
-        enabled: true
-        files:
-          - file: "./mocks/random/success.json"
-            weight: 70             # 70% 概率
-            status_code: 200
-          - file: "./mocks/random/error.json"
-            weight: 20             # 20% 概率
-            status_code: 500
-          - file: "./mocks/random/timeout.json"
-            weight: 10             # 10% 概率
-            status_code: 504
-            delay_ms: 5000         # 模拟超时
-
+    # ...
 ```
 
 ---

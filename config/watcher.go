@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -47,11 +48,13 @@ func (w *Watcher) watchWithFsnotify() {
 	}
 	defer watcher.Close()
 
-	if err := watcher.Add(w.configPath); err != nil {
+	watchedPaths := make(map[string]struct{})
+	if err := w.addWatchPath(watcher, watchedPaths, w.configPath); err != nil {
 		w.logger.Printf("[WARN] Failed to watch config file, falling back to polling: %v", err)
 		w.watchWithPolling(5) // fallback to polling
 		return
 	}
+	w.watchEndpointConfigFiles(watcher, watchedPaths, w.manager.GetConfig())
 
 	w.logger.Printf("[INFO] Started watching config file: %s", w.configPath)
 
@@ -77,7 +80,7 @@ func (w *Watcher) watchWithFsnotify() {
 					debounceTimer.Stop()
 				}
 				debounceTimer = time.AfterFunc(debounceDuration, func() {
-					w.reloadConfig()
+					w.reloadConfig(watcher, watchedPaths)
 				})
 			}
 
@@ -103,13 +106,13 @@ func (w *Watcher) watchWithPolling(intervalSec int) {
 			w.logger.Println("[INFO] Config watcher stopped")
 			return
 		case <-ticker.C:
-			w.reloadConfig()
+			w.reloadConfig(nil, nil)
 		}
 	}
 }
 
 // reloadConfig reloads the configuration from file
-func (w *Watcher) reloadConfig() {
+func (w *Watcher) reloadConfig(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -127,5 +130,30 @@ func (w *Watcher) reloadConfig() {
 
 	// Update config
 	w.manager.SetConfig(newCfg)
+	w.watchEndpointConfigFiles(watcher, watchedPaths, newCfg)
 	w.logger.Printf("[INFO] Configuration reloaded successfully at %s", time.Now().Format(time.RFC3339))
+}
+
+func (w *Watcher) watchEndpointConfigFiles(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}, cfg *Config) {
+	if watcher == nil || watchedPaths == nil || cfg == nil {
+		return
+	}
+
+	for _, path := range cfg.EndpointConfigPaths {
+		if err := w.addWatchPath(watcher, watchedPaths, path); err != nil {
+			w.logger.Printf("[WARN] Failed to watch endpoint config file '%s': %v", path, err)
+		}
+	}
+}
+
+func (w *Watcher) addWatchPath(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}, path string) error {
+	cleanPath := filepath.Clean(path)
+	if _, exists := watchedPaths[cleanPath]; exists {
+		return nil
+	}
+	if err := watcher.Add(cleanPath); err != nil {
+		return err
+	}
+	watchedPaths[cleanPath] = struct{}{}
+	return nil
 }

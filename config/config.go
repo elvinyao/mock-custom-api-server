@@ -5,9 +5,10 @@ import "time"
 // ==================== Main Config ====================
 
 type Config struct {
-	Server      ServerConfig `yaml:"server"`
-	HealthCheck HealthCheck  `yaml:"health_check"`
-	Endpoints   []Endpoint   `yaml:"endpoints"`
+	Server              ServerConfig `yaml:"server"`
+	HealthCheck         HealthCheck  `yaml:"health_check"`
+	Endpoints           []Endpoint   `yaml:"endpoints"`
+	EndpointConfigPaths []string     `yaml:"-"`
 }
 
 // ==================== Server Config ====================
@@ -21,7 +22,7 @@ type ServerConfig struct {
 }
 
 type LoggingConfig struct {
-	Level     string `yaml:"level"`      // debug, info, warn, error
+	Level     string `yaml:"level"` // debug, info, warn, error
 	AccessLog bool   `yaml:"access_log"`
 	LogFormat string `yaml:"log_format"` // json, text
 	LogFile   string `yaml:"log_file"`   // optional, empty means stdout
