@@ -22,3 +22,4 @@ endpoints:
   config_paths:
     - "./config/endpoints/holiday.yaml"
     - "./config/endpoints/business_apis.yaml"
+    - "./config/endpoints/apex_tasks.yaml"
