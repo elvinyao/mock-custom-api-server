@@ -19,6 +19,46 @@ health_check:
   path: "/health"
 
 endpoints:
+
+
+  # ============================================================
+  # Holiday API - Check if a date is a holiday
+  # ============================================================
+  - path: "/is_holiday"
+    method: "GET"
+    description: "Returns whether a given date is a holiday"
+
+    selectors:
+      - name: "date"
+        type: "query"
+        key: "date"
+
+    rules:
+      # Specific holidays
+      - conditions:
+          - selector: "date"
+            match_type: "exact"
+            value: "2026-01-01"
+        response_file: "./mocks/holiday/is_holiday_true.json"
+        status_code: 200
+
+      - conditions:
+          - selector: "date"
+            match_type: "exact"
+            value: "2026-05-01"
+        response_file: "./mocks/holiday/is_holiday_true.json"
+        status_code: 200
+
+      - conditions:
+          - selector: "date"
+            match_type: "exact"
+            value: "2026-10-01"
+        response_file: "./mocks/holiday/is_holiday_true.json"
+        status_code: 200
+    default:
+      response_file: "./mocks/holiday/is_holiday_false.json"
+      status_code: 200
+
   # Example 1: Payment status endpoint (multi-condition + regex)
   - path: "/api/v1/payment/status"
     method: "POST"
