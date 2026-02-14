@@ -6,7 +6,7 @@ paths:
     selectors:
       - name: "order_id"
         type: "body"
-        key: "order_id"
+        key: "0.order_id"
       - name: "user_type"
         type: "header"
         key: "X-User-Type"
