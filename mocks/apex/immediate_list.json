@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "task_id": "IMM-001",
+      "plugin_name": "confluence_jira",
+      "payload": {
+        "action": "create_page",
+        "space_key": "DEV",
+        "title": "Sprint 42 Review Notes",
+        "content": "Auto-generated sprint review page"
+      }
+    },
+    {
+      "task_id": "IMM-002",
+      "plugin_name": "confluence_jira",
+      "payload": {
+        "action": "create_jira_issue",
+        "project_key": "CDRS",
+        "summary": "Fix login timeout issue",
+        "issue_type": "Bug",
+        "priority": "High"
+      }
+    }
+  ]
+}

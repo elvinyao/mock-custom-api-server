@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "task_id": "TIM-001",
+      "plugin_name": "confluence_jira",
+      "payload": {
+        "action": "sync_pages",
+        "space_key": "OPS",
+        "label": "daily-report"
+      },
+      "schedule": {
+        "hour": 9,
+        "minute": 0,
+        "days": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+      }
+    },
+    {
+      "task_id": "TIM-002",
+      "plugin_name": "confluence_jira",
+      "payload": {
+        "action": "cleanup_old_issues",
+        "project_key": "CDRS",
+        "older_than_days": 90
+      },
+      "schedule": {
+        "hour": 22,
+        "minute": 30,
+        "days": ["friday"]
+      }
+    }
+  ]
+}

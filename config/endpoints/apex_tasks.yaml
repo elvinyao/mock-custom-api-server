@@ -1,0 +1,93 @@
+paths:
+
+  - path: "/immediate_exec_list"
+    method: "GET"
+    escription: "Returns the list of immediate-execution tasks"
+
+    selectors:
+      - name: "auth"
+        type: "header"
+        key: "Authorization"
+
+    rules:
+      # No auth token → 401
+      - conditions:
+          - selector: "auth"
+            match_type: "exact"
+            value: ""
+        response_file: "./mocks/apex/unauthorized.json"
+        status_code: 401
+
+      # Default: return task list
+      - conditions: []
+        response_file: "./mocks/apex/immediate_list.json"
+        status_code: 200
+
+      # ============================================================
+      # APEX API - Timing task list
+      # ============================================================
+  - path: "/timing_list"
+    method: "GET"
+    description: "Returns the list of scheduled/timing tasks"
+
+    selectors:
+      - name: "auth"
+        type: "header"
+        key: "Authorization"
+
+    rules:
+      - conditions:
+          - selector: "auth"
+            match_type: "exact"
+            value: ""
+        response_file: "./mocks/apex/unauthorized.json"
+        status_code: 401
+
+      - conditions: []
+        response_file: "./mocks/apex/timing_list.json"
+        status_code: 200
+
+      # ============================================================
+      # APEX API - Report task result
+      # ============================================================
+  - path: "/task_result"
+    method: "POST"
+    description: "Receives task execution results from cdrs-bot"
+
+    selectors:
+      - name: "task_id"
+        type: "body"
+        key: "task_id"
+      - name: "status"
+        type: "body"
+        key: "status"
+
+    rules:
+      # Missing task_id → 400
+      - conditions:
+          - selector: "task_id"
+            match_type: "exact"
+            value: ""
+        response_file: "./mocks/apex/report_bad_request.json"
+        status_code: 400
+
+      # Success report
+      - conditions:
+          - selector: "status"
+            match_type: "exact"
+            value: "success"
+        response_file: "./mocks/apex/report_accepted.json"
+        status_code: 200
+
+      # Failure report
+      - conditions:
+          - selector: "status"
+            match_type: "exact"
+            value: "failure"
+        response_file: "./mocks/apex/report_accepted.json"
+        status_code: 200
+
+      # Default fallback
+      - conditions: []
+        response_file: "./mocks/apex/report_accepted.json"
+        status_code: 200
