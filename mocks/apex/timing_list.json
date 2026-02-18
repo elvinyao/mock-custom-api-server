@@ -9,6 +9,6 @@
     "update-timing-week-no": null,
     "update-timing-dayofweek": null,
     "update-timing-time": "21;21",
-    "pageurl": "htt"
+    "pageurl": "https://env01.test.com/wiki/action.asp?pageId=12345"
   }
 ]
