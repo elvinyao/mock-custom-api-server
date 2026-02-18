@@ -315,19 +315,15 @@ func (h *MockHandler) findEndpoint(endpoints []config.Endpoint, requestPath, met
 	return nil, nil
 }
 
-// matchPath matches a request path against an endpoint path pattern
-// Supports path parameters like :id or :user_id, and wildcard *
+// matchPath matches a request path against an endpoint path pattern.
+// Supports :param segments and catch-all wildcards at the end:
+//   /*name  (Gin-style named catch-all, e.g. /*path)
+//   /*      (unnamed, also accepted)
 func matchPath(pattern, requestPath string) (map[string]string, bool) {
-	// Handle wildcard at end
-	if strings.HasSuffix(pattern, "/*") {
-		prefix := strings.TrimSuffix(pattern, "/*")
-		if strings.HasPrefix(requestPath, prefix) {
-			return map[string]string{}, true
-		}
-		return nil, false
-	}
-	if strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
+	// Detect catch-all wildcard: /*name or /*
+	if idx := strings.Index(pattern, "/*"); idx != -1 {
+		prefix := pattern[:idx]
+		// match if requestPath starts with the prefix (with or without trailing slash)
 		if strings.HasPrefix(requestPath, prefix) {
 			return map[string]string{}, true
 		}

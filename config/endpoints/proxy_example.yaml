@@ -22,7 +22,7 @@ endpoints:
   # Forwards /proxy/posts/* to https://jsonplaceholder.typicode.com/posts/*
   # curl http://localhost:8080/proxy/posts
   # curl http://localhost:8080/proxy/posts/1
-  - path: "/proxy/posts/*"
+  - path: "/proxy/posts/*path"
     method: "ANY"
     description: "Transparent proxy → jsonplaceholder /posts"
     mode: "proxy"
@@ -35,7 +35,7 @@ endpoints:
   # Forwards to a real API AND saves each response as a YAML stub.
   # After a few calls, ./recorded/ will contain ready-to-use mock files.
   # curl http://localhost:8080/record/users/1
-  - path: "/record/users/*"
+  - path: "/record/users/*path"
     method: "ANY"
     description: "Proxy → jsonplaceholder /users  (records stubs to ./recorded/)"
     mode: "proxy"
