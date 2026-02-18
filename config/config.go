@@ -8,174 +8,173 @@ import (
 // ==================== Main Config ====================
 
 type Config struct {
-	Server              ServerConfig `yaml:"server"`
-	HealthCheck         HealthCheck  `yaml:"health_check"`
-	Endpoints           []Endpoint   `yaml:"endpoints"`
-	EndpointConfigPaths []string     `yaml:"-"`
+	Server              ServerConfig `yaml:"server"               json:"server"`
+	HealthCheck         HealthCheck  `yaml:"health_check"         json:"health_check"`
+	Endpoints           []Endpoint   `yaml:"endpoints"            json:"endpoints"`
+	EndpointConfigPaths []string     `yaml:"-"                    json:"-"`
 }
 
 // ==================== Server Config ====================
 
 type ServerConfig struct {
-	Port              int            `yaml:"port"`
-	HotReload         bool           `yaml:"hot_reload"`
-	ReloadIntervalSec int            `yaml:"reload_interval_sec"`
-	Logging           LoggingConfig  `yaml:"logging"`
-	ErrorHandling     ErrorHandling  `yaml:"error_handling"`
-	CORS              CORSConfig     `yaml:"cors"`
-	AdminAPI          AdminAPIConfig `yaml:"admin_api"`
-	Recording         RecordingConfig `yaml:"recording"`
+	Port              int             `yaml:"port"                json:"port"`
+	HotReload         bool            `yaml:"hot_reload"          json:"hot_reload"`
+	ReloadIntervalSec int             `yaml:"reload_interval_sec" json:"reload_interval_sec"`
+	Logging           LoggingConfig   `yaml:"logging"             json:"logging"`
+	ErrorHandling     ErrorHandling   `yaml:"error_handling"      json:"error_handling"`
+	CORS              CORSConfig      `yaml:"cors"                json:"cors"`
+	AdminAPI          AdminAPIConfig  `yaml:"admin_api"           json:"admin_api"`
+	Recording         RecordingConfig `yaml:"recording"           json:"recording"`
 }
 
 type LoggingConfig struct {
-	Level     string `yaml:"level"` // debug, info, warn, error
-	AccessLog bool   `yaml:"access_log"`
-	LogFormat string `yaml:"log_format"` // json, text
-	LogFile   string `yaml:"log_file"`   // optional, empty means stdout
+	Level     string `yaml:"level"      json:"level"`
+	AccessLog bool   `yaml:"access_log" json:"access_log"`
+	LogFormat string `yaml:"log_format" json:"log_format"`
+	LogFile   string `yaml:"log_file"   json:"log_file"`
 }
 
 type ErrorHandling struct {
-	ShowDetails          bool           `yaml:"show_details"`
-	CustomErrorResponses map[int]string `yaml:"custom_error_responses"` // status_code -> file_path
+	ShowDetails          bool           `yaml:"show_details"           json:"show_details"`
+	CustomErrorResponses map[int]string `yaml:"custom_error_responses" json:"custom_error_responses"`
 }
 
 // ==================== CORS Config ====================
 
 type CORSConfig struct {
-	Enabled          bool     `yaml:"enabled"`
-	AllowedOrigins   []string `yaml:"allowed_origins"`
-	AllowedMethods   []string `yaml:"allowed_methods"`
-	AllowedHeaders   []string `yaml:"allowed_headers"`
-	ExposedHeaders   []string `yaml:"exposed_headers"`
-	AllowCredentials bool     `yaml:"allow_credentials"`
-	MaxAgeSeconds    int      `yaml:"max_age_seconds"`
+	Enabled          bool     `yaml:"enabled"           json:"enabled"`
+	AllowedOrigins   []string `yaml:"allowed_origins"   json:"allowed_origins"`
+	AllowedMethods   []string `yaml:"allowed_methods"   json:"allowed_methods"`
+	AllowedHeaders   []string `yaml:"allowed_headers"   json:"allowed_headers"`
+	ExposedHeaders   []string `yaml:"exposed_headers"   json:"exposed_headers"`
+	AllowCredentials bool     `yaml:"allow_credentials" json:"allow_credentials"`
+	MaxAgeSeconds    int      `yaml:"max_age_seconds"   json:"max_age_seconds"`
 }
 
 // ==================== Admin API Config ====================
 
 type AdminAPIConfig struct {
-	Enabled bool      `yaml:"enabled"`
-	Prefix  string    `yaml:"prefix"` // default "/mock-admin"
-	Auth    AdminAuth `yaml:"auth"`
+	Enabled bool      `yaml:"enabled" json:"enabled"`
+	Prefix  string    `yaml:"prefix"  json:"prefix"`
+	Auth    AdminAuth `yaml:"auth"    json:"auth"`
 }
 
 type AdminAuth struct {
-	Enabled  bool   `yaml:"enabled"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Enabled  bool   `yaml:"enabled"  json:"enabled"`
+	Username string `yaml:"username" json:"username"`
+	Password string `yaml:"password" json:"-"` // never expose password in API
 }
 
 // ==================== Recording Config ====================
 
 type RecordingConfig struct {
-	Enabled      bool     `yaml:"enabled"`
-	MaxEntries   int      `yaml:"max_entries"`    // default 1000
-	RecordBody   bool     `yaml:"record_body"`
-	MaxBodyBytes int      `yaml:"max_body_bytes"` // default 65536
-	ExcludePaths []string `yaml:"exclude_paths"`
+	Enabled      bool     `yaml:"enabled"        json:"enabled"`
+	MaxEntries   int      `yaml:"max_entries"    json:"max_entries"`
+	RecordBody   bool     `yaml:"record_body"    json:"record_body"`
+	MaxBodyBytes int      `yaml:"max_body_bytes" json:"max_body_bytes"`
+	ExcludePaths []string `yaml:"exclude_paths"  json:"exclude_paths"`
 }
 
 // ==================== Health Check ====================
 
 type HealthCheck struct {
-	Enabled bool   `yaml:"enabled"`
-	Path    string `yaml:"path"`
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Path    string `yaml:"path"    json:"path"`
 }
 
 // ==================== Endpoint Config ====================
 
 type Endpoint struct {
-	Path        string         `yaml:"path"`
-	Method      string         `yaml:"method"`
-	Description string         `yaml:"description"`
-	Selectors   []Selector     `yaml:"selectors"`
-	Rules       []Rule         `yaml:"rules"`
-	Default     ResponseConfig `yaml:"default"`
+	Path        string         `yaml:"path"        json:"path"`
+	Method      string         `yaml:"method"      json:"method"`
+	Description string         `yaml:"description" json:"description"`
+	Selectors   []Selector     `yaml:"selectors"   json:"selectors"`
+	Rules       []Rule         `yaml:"rules"       json:"rules"`
+	Default     ResponseConfig `yaml:"default"     json:"default"`
 	// Scenario support
-	Scenario    string `yaml:"scenario,omitempty"`
-	ScenarioKey string `yaml:"scenario_key,omitempty"`
+	Scenario    string `yaml:"scenario,omitempty"     json:"scenario,omitempty"`
+	ScenarioKey string `yaml:"scenario_key,omitempty" json:"scenario_key,omitempty"`
 	// Proxy support
-	Mode  string      `yaml:"mode,omitempty"` // "mock" (default) | "proxy"
-	Proxy ProxyConfig `yaml:"proxy,omitempty"`
+	Mode  string      `yaml:"mode,omitempty"  json:"mode,omitempty"`
+	Proxy ProxyConfig `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 }
 
 type Selector struct {
-	Name string `yaml:"name"` // selector name, used in rules
-	Type string `yaml:"type"` // body, header, query, path
-	Key  string `yaml:"key"`  // json path or header/query/path key
+	Name string `yaml:"name" json:"name"`
+	Type string `yaml:"type" json:"type"`
+	Key  string `yaml:"key"  json:"key"`
 }
 
 // ==================== Rule Config ====================
 
 type Rule struct {
-	ConditionLogic  string           `yaml:"condition_logic,omitempty"` // "and" (default) | "or"
-	Conditions      []Condition      `yaml:"conditions"`
-	ConditionGroups []ConditionGroup `yaml:"condition_groups,omitempty"`
-	// Scenario step support
-	ScenarioStep string `yaml:"scenario_step,omitempty"` // "idle", "initiated", "any", etc.
-	NextStep     string `yaml:"next_step,omitempty"`      // step to transition to on match
-	ResponseConfig `yaml:",inline"`
+	ConditionLogic  string           `yaml:"condition_logic,omitempty"  json:"condition_logic,omitempty"`
+	Conditions      []Condition      `yaml:"conditions"                 json:"conditions"`
+	ConditionGroups []ConditionGroup `yaml:"condition_groups,omitempty" json:"condition_groups,omitempty"`
+	ScenarioStep    string           `yaml:"scenario_step,omitempty"    json:"scenario_step,omitempty"`
+	NextStep        string           `yaml:"next_step,omitempty"        json:"next_step,omitempty"`
+	ResponseConfig  `yaml:",inline"  json:",inline"`
 }
 
 type ConditionGroup struct {
-	Logic      string      `yaml:"logic"` // "and" | "or"
-	Conditions []Condition `yaml:"conditions"`
+	Logic      string      `yaml:"logic"      json:"logic"`
+	Conditions []Condition `yaml:"conditions" json:"conditions"`
 }
 
 type Condition struct {
-	Selector  string `yaml:"selector"`   // reference to Selector name
-	MatchType string `yaml:"match_type"` // exact, prefix, suffix, regex, range
-	Value     string `yaml:"value"`      // match value
+	Selector  string `yaml:"selector"   json:"selector"`
+	MatchType string `yaml:"match_type" json:"match_type"`
+	Value     string `yaml:"value"      json:"value"`
 }
 
 // ==================== Response Config ====================
 
 type ResponseConfig struct {
-	ResponseFile    string            `yaml:"response_file,omitempty"`
-	StatusCode      int               `yaml:"status_code"`
-	DelayMs         int               `yaml:"delay_ms,omitempty"`
-	Headers         map[string]string `yaml:"headers,omitempty"`
-	ContentType     string            `yaml:"content_type,omitempty"`
-	Template        *TemplateConfig   `yaml:"template,omitempty"`
-	RandomResponses *RandomResponses  `yaml:"random_responses,omitempty"`
+	ResponseFile    string            `yaml:"response_file,omitempty"    json:"response_file,omitempty"`
+	StatusCode      int               `yaml:"status_code"                json:"status_code"`
+	DelayMs         int               `yaml:"delay_ms,omitempty"         json:"delay_ms,omitempty"`
+	Headers         map[string]string `yaml:"headers,omitempty"          json:"headers,omitempty"`
+	ContentType     string            `yaml:"content_type,omitempty"     json:"content_type,omitempty"`
+	Template        *TemplateConfig   `yaml:"template,omitempty"         json:"template,omitempty"`
+	RandomResponses *RandomResponses  `yaml:"random_responses,omitempty" json:"random_responses,omitempty"`
 }
 
 type TemplateConfig struct {
-	Enabled   bool     `yaml:"enabled"`
-	Engine    string   `yaml:"engine,omitempty"` // "simple" (default) | "go"
-	Variables []string `yaml:"variables"`        // supported variables list
+	Enabled   bool     `yaml:"enabled"          json:"enabled"`
+	Engine    string   `yaml:"engine,omitempty" json:"engine,omitempty"`
+	Variables []string `yaml:"variables"        json:"variables"`
 }
 
 type RandomResponses struct {
-	Enabled bool             `yaml:"enabled"`
-	Files   []RandomResponse `yaml:"files"`
+	Enabled bool             `yaml:"enabled" json:"enabled"`
+	Files   []RandomResponse `yaml:"files"   json:"files"`
 }
 
 type RandomResponse struct {
-	File       string `yaml:"file"`
-	Weight     int    `yaml:"weight"` // weight percentage
-	StatusCode int    `yaml:"status_code"`
-	DelayMs    int    `yaml:"delay_ms,omitempty"`
+	File       string `yaml:"file"              json:"file"`
+	Weight     int    `yaml:"weight"            json:"weight"`
+	StatusCode int    `yaml:"status_code"       json:"status_code"`
+	DelayMs    int    `yaml:"delay_ms,omitempty" json:"delay_ms,omitempty"`
 }
 
 // ==================== Proxy Config ====================
 
 type ProxyConfig struct {
-	Target          string            `yaml:"target"`
-	StripPrefix     string            `yaml:"strip_prefix,omitempty"`
-	TimeoutMs       int               `yaml:"timeout_ms,omitempty"`
-	Record          bool              `yaml:"record,omitempty"`
-	RecordDir       string            `yaml:"record_dir,omitempty"`
-	Headers         map[string]string `yaml:"headers,omitempty"`
-	FallbackOnError bool              `yaml:"fallback_on_error,omitempty"`
+	Target          string            `yaml:"target"                     json:"target"`
+	StripPrefix     string            `yaml:"strip_prefix,omitempty"     json:"strip_prefix,omitempty"`
+	TimeoutMs       int               `yaml:"timeout_ms,omitempty"       json:"timeout_ms,omitempty"`
+	Record          bool              `yaml:"record,omitempty"           json:"record,omitempty"`
+	RecordDir       string            `yaml:"record_dir,omitempty"       json:"record_dir,omitempty"`
+	Headers         map[string]string `yaml:"headers,omitempty"          json:"headers,omitempty"`
+	FallbackOnError bool              `yaml:"fallback_on_error,omitempty" json:"fallback_on_error,omitempty"`
 }
 
 // ==================== Built-in Variables ====================
 
 type BuiltinVariables struct {
-	Timestamp time.Time
-	UUID      string
-	RequestID string
+	Timestamp time.Time `json:"timestamp"`
+	UUID      string    `json:"uuid"`
+	RequestID string    `json:"request_id"`
 }
 
 // ==================== Config Manager ====================
