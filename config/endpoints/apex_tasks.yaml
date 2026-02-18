@@ -56,10 +56,10 @@ paths:
 
     selectors:
       - name: "task_id"
-        type: "body"
-        key: "task_id"
+        type: "query"
+        key: "qe-timing-list-id"
       - name: "status"
-        type: "body"
+        type: "query"
         key: "status"
 
     rules:
