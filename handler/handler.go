@@ -111,11 +111,14 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 
 	// Proxy mode: forward to upstream, fall back to mock rules only if configured
 	if strings.EqualFold(endpoint.Mode, "proxy") {
+		c.Set("matched_rule", "proxy:"+endpoint.Proxy.Target)
+		c.Set("response_file", "")
 		proxyHandler := proxy.New()
 		if proxyHandler.ProxyRequest(c, *endpoint) {
 			return // handled by proxy (success or non-fallback error)
 		}
 		// fallback_on_error=true and upstream failed: continue to mock rules below
+		c.Set("matched_rule", "proxy:fallback")
 	}
 
 	// Read body for potential reuse
