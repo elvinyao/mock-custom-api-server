@@ -13,13 +13,26 @@ type Condition struct {
 	Value     string
 }
 
+// ConditionGroup represents a group of conditions with its own logic
+type ConditionGroup struct {
+	Logic      string // "and" | "or"
+	Conditions []Condition
+}
+
 // Rule represents a matching rule with conditions and response
 type Rule struct {
-	Conditions   []Condition
+	ConditionLogic  string // "and" (default) | "or"
+	Conditions      []Condition
+	ConditionGroups []ConditionGroup
+	// Scenario support
+	ScenarioStep string
+	NextStep     string
+	// Response fields
 	ResponseFile string
 	StatusCode   int
 	DelayMs      int
 	Headers      map[string]string
+	ContentType  string
 }
 
 // MatchRules finds the first matching rule based on extracted values
@@ -27,11 +40,65 @@ type Rule struct {
 func MatchRules(values map[string]string, rules []Rule) *Rule {
 	for i := range rules {
 		rule := &rules[i]
-		if matchAllConditions(values, rule.Conditions) {
+		if matchRule(values, rule) {
 			return rule
 		}
 	}
 	return nil
+}
+
+// MatchRulesForStep finds the first matching rule for the given scenario step
+func MatchRulesForStep(values map[string]string, rules []Rule, currentStep string) *Rule {
+	for i := range rules {
+		rule := &rules[i]
+		// Filter by scenario step
+		if rule.ScenarioStep != "" && rule.ScenarioStep != "any" && rule.ScenarioStep != currentStep {
+			continue
+		}
+		if matchRule(values, rule) {
+			return rule
+		}
+	}
+	return nil
+}
+
+// matchRule checks if all conditions/groups in a rule match according to its logic
+func matchRule(values map[string]string, rule *Rule) bool {
+	logic := strings.ToLower(rule.ConditionLogic)
+	if logic == "" {
+		logic = "and"
+	}
+
+	// Evaluate direct conditions
+	condResult := matchConditions(values, rule.Conditions, logic)
+
+	// If no condition groups, return direct condition result
+	if len(rule.ConditionGroups) == 0 {
+		return condResult
+	}
+
+	// Evaluate condition groups (always AND'd with direct conditions)
+	groupResult := true
+	for _, group := range rule.ConditionGroups {
+		if !matchGroup(values, group) {
+			groupResult = false
+			break
+		}
+	}
+
+	return condResult && groupResult
+}
+
+// matchConditions evaluates a list of conditions with the given logic ("and" | "or")
+func matchConditions(values map[string]string, conditions []Condition, logic string) bool {
+	if len(conditions) == 0 {
+		return true
+	}
+
+	if logic == "or" {
+		return matchAnyCondition(values, conditions)
+	}
+	return matchAllConditions(values, conditions)
 }
 
 // matchAllConditions checks if all conditions in a rule match (AND logic)
@@ -49,6 +116,30 @@ func matchAllConditions(values map[string]string, conditions []Condition) bool {
 	return true
 }
 
+// matchAnyCondition checks if any condition matches (OR logic)
+func matchAnyCondition(values map[string]string, conditions []Condition) bool {
+	for _, cond := range conditions {
+		targetValue, exists := values[cond.Selector]
+		if !exists {
+			targetValue = ""
+		}
+
+		if matchCondition(targetValue, cond) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchGroup evaluates a ConditionGroup
+func matchGroup(values map[string]string, group ConditionGroup) bool {
+	logic := strings.ToLower(group.Logic)
+	if logic == "" {
+		logic = "and"
+	}
+	return matchConditions(values, group.Conditions, logic)
+}
+
 // matchCondition checks if a single condition matches
 func matchCondition(targetValue string, cond Condition) bool {
 	switch strings.ToLower(cond.MatchType) {
@@ -60,6 +151,9 @@ func matchCondition(targetValue string, cond Condition) bool {
 
 	case "suffix":
 		return strings.HasSuffix(targetValue, cond.Value)
+
+	case "contains":
+		return strings.Contains(targetValue, cond.Value)
 
 	case "regex":
 		matched, err := regexp.MatchString(cond.Value, targetValue)

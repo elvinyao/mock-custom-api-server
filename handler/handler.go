@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"mock-api-server/config"
+	"mock-api-server/state"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,7 @@ import (
 type MockHandler struct {
 	configManager   *config.ConfigManager
 	responseBuilder *ResponseBuilder
+	stateStore      *state.ScenarioStore
 }
 
 // NewMockHandler creates a new MockHandler
@@ -25,18 +27,37 @@ func NewMockHandler(cfgManager *config.ConfigManager) *MockHandler {
 	return &MockHandler{
 		configManager:   cfgManager,
 		responseBuilder: NewResponseBuilder(),
+		stateStore:      state.New(),
 	}
+}
+
+// NewMockHandlerWithState creates a MockHandler with an existing state store
+func NewMockHandlerWithState(cfgManager *config.ConfigManager, stateStore *state.ScenarioStore) *MockHandler {
+	return &MockHandler{
+		configManager:   cfgManager,
+		responseBuilder: NewResponseBuilder(),
+		stateStore:      stateStore,
+	}
+}
+
+// GetStateStore returns the state store (for use by admin handlers)
+func (h *MockHandler) GetStateStore() *state.ScenarioStore {
+	return h.stateStore
 }
 
 // RegisterRoutes registers all endpoint routes from config
 func (h *MockHandler) RegisterRoutes(r *gin.Engine) {
-	cfg := h.configManager.GetConfig()
-	if cfg == nil {
-		return
-	}
+	endpoints := h.configManager.GetAllEndpoints()
+	h.registerEndpoints(r, endpoints)
 
-	// Register each endpoint path individually to avoid wildcard conflicts
-	for _, ep := range cfg.Endpoints {
+	// Set NoRoute handler for 404
+	r.NoRoute(func(c *gin.Context) {
+		h.handleNotFound(c, h.configManager.GetConfig())
+	})
+}
+
+func (h *MockHandler) registerEndpoints(r *gin.Engine, endpoints []config.Endpoint) {
+	for _, ep := range endpoints {
 		path := ep.Path
 		method := strings.ToUpper(ep.Method)
 
@@ -55,15 +76,12 @@ func (h *MockHandler) RegisterRoutes(r *gin.Engine) {
 			r.OPTIONS(path, h.handleRequest)
 		case "HEAD":
 			r.HEAD(path, h.handleRequest)
+		case "ANY":
+			r.Any(path, h.handleRequest)
 		default:
 			r.Handle(method, path, h.handleRequest)
 		}
 	}
-
-	// Set NoRoute handler for 404
-	r.NoRoute(func(c *gin.Context) {
-		h.handleNotFound(c, h.configManager.GetConfig())
-	})
 }
 
 // handleRequest handles incoming requests and matches against config endpoints
@@ -77,8 +95,9 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 	path := c.Request.URL.Path
 	method := c.Request.Method
 
-	// Find matching endpoint
-	endpoint, pathParams := h.findEndpoint(cfg.Endpoints, path, method)
+	// Find matching endpoint (from all sources: file + runtime)
+	allEndpoints := h.configManager.GetAllEndpoints()
+	endpoint, pathParams := h.findEndpoint(allEndpoints, path, method)
 	if endpoint == nil {
 		h.handleNotFound(c, cfg)
 		return
@@ -111,27 +130,28 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 	values := ExtractValues(c, selectors, pathParams)
 
 	// Convert config rules to handler rules
-	rules := make([]Rule, len(endpoint.Rules))
-	for i, r := range endpoint.Rules {
-		conditions := make([]Condition, len(r.Conditions))
-		for j, cond := range r.Conditions {
-			conditions[j] = Condition{
-				Selector:  cond.Selector,
-				MatchType: cond.MatchType,
-				Value:     cond.Value,
-			}
-		}
-		rules[i] = Rule{
-			Conditions:   conditions,
-			ResponseFile: r.ResponseFile,
-			StatusCode:   r.StatusCode,
-			DelayMs:      r.DelayMs,
-			Headers:      r.Headers,
-		}
-	}
+	rules := convertRules(endpoint.Rules)
 
-	// Match rules
-	matchedRule := MatchRules(values, rules)
+	// Match rules, considering scenario state if applicable
+	var matchedRule *Rule
+	if endpoint.Scenario != "" {
+		// Get current scenario step using partition key
+		partitionValue := ""
+		if endpoint.ScenarioKey != "" {
+			partitionValue = values[endpoint.ScenarioKey]
+		}
+		currentStep := h.stateStore.GetStep(endpoint.Scenario, partitionValue)
+
+		// Match rule filtered by scenario step
+		matchedRule = MatchRulesForStep(values, rules, currentStep)
+
+		// Transition to next step if rule matched
+		if matchedRule != nil && matchedRule.NextStep != "" {
+			h.stateStore.SetStep(endpoint.Scenario, partitionValue, matchedRule.NextStep)
+		}
+	} else {
+		matchedRule = MatchRules(values, rules)
+	}
 
 	// Build response config
 	var respCfg ResponseBuildConfig
@@ -144,16 +164,24 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 			StatusCode:      matchedRule.StatusCode,
 			DelayMs:         matchedRule.DelayMs,
 			Headers:         matchedRule.Headers,
-			TemplateEnabled: false, // Rules don't have template config currently
+			ContentType:     matchedRule.ContentType,
+			TemplateEnabled: false,
 		}
 	} else {
 		matchedRuleName = "default"
+		templateEnabled := endpoint.Default.Template != nil && endpoint.Default.Template.Enabled
+		templateEngine := "simple"
+		if endpoint.Default.Template != nil && endpoint.Default.Template.Engine != "" {
+			templateEngine = endpoint.Default.Template.Engine
+		}
 		respCfg = ResponseBuildConfig{
 			ResponseFile:    endpoint.Default.ResponseFile,
 			StatusCode:      endpoint.Default.StatusCode,
 			DelayMs:         endpoint.Default.DelayMs,
 			Headers:         endpoint.Default.Headers,
-			TemplateEnabled: endpoint.Default.Template != nil && endpoint.Default.Template.Enabled,
+			ContentType:     endpoint.Default.ContentType,
+			TemplateEnabled: templateEnabled,
+			TemplateEngine:  templateEngine,
 		}
 
 		// Handle random responses
@@ -171,7 +199,7 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 		}
 	}
 
-	// Store matched rule name in context for logging
+	// Store matched rule name in context for logging/recording
 	c.Set("matched_rule", matchedRuleName)
 	c.Set("response_file", respCfg.ResponseFile)
 
@@ -191,7 +219,57 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 	}
 
 	// Send response
-	c.Data(result.StatusCode, result.Headers["Content-Type"], result.Body)
+	contentType := result.ContentType
+	if ct, ok := result.Headers["Content-Type"]; ok {
+		contentType = ct
+	}
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	c.Data(result.StatusCode, contentType, result.Body)
+}
+
+// convertRules converts config rules to handler rules
+func convertRules(cfgRules []config.Rule) []Rule {
+	rules := make([]Rule, len(cfgRules))
+	for i, r := range cfgRules {
+		conditions := make([]Condition, len(r.Conditions))
+		for j, cond := range r.Conditions {
+			conditions[j] = Condition{
+				Selector:  cond.Selector,
+				MatchType: cond.MatchType,
+				Value:     cond.Value,
+			}
+		}
+		groups := make([]ConditionGroup, len(r.ConditionGroups))
+		for j, g := range r.ConditionGroups {
+			gConds := make([]Condition, len(g.Conditions))
+			for k, gc := range g.Conditions {
+				gConds[k] = Condition{
+					Selector:  gc.Selector,
+					MatchType: gc.MatchType,
+					Value:     gc.Value,
+				}
+			}
+			groups[j] = ConditionGroup{
+				Logic:      g.Logic,
+				Conditions: gConds,
+			}
+		}
+		rules[i] = Rule{
+			ConditionLogic:  r.ConditionLogic,
+			Conditions:      conditions,
+			ConditionGroups: groups,
+			ScenarioStep:    r.ScenarioStep,
+			NextStep:        r.NextStep,
+			ResponseFile:    r.ResponseFile,
+			StatusCode:      r.StatusCode,
+			DelayMs:         r.DelayMs,
+			Headers:         r.Headers,
+			ContentType:     r.ContentType,
+		}
+	}
+	return rules
 }
 
 // findEndpoint finds a matching endpoint for the given path and method
@@ -200,7 +278,7 @@ func (h *MockHandler) findEndpoint(endpoints []config.Endpoint, requestPath, met
 		ep := &endpoints[i]
 
 		// Check method
-		if !strings.EqualFold(ep.Method, method) {
+		if ep.Method != "ANY" && !strings.EqualFold(ep.Method, method) {
 			continue
 		}
 
@@ -214,8 +292,24 @@ func (h *MockHandler) findEndpoint(endpoints []config.Endpoint, requestPath, met
 }
 
 // matchPath matches a request path against an endpoint path pattern
-// Supports path parameters like :id or :user_id
+// Supports path parameters like :id or :user_id, and wildcard *
 func matchPath(pattern, requestPath string) (map[string]string, bool) {
+	// Handle wildcard at end
+	if strings.HasSuffix(pattern, "/*") {
+		prefix := strings.TrimSuffix(pattern, "/*")
+		if strings.HasPrefix(requestPath, prefix) {
+			return map[string]string{}, true
+		}
+		return nil, false
+	}
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		if strings.HasPrefix(requestPath, prefix) {
+			return map[string]string{}, true
+		}
+		return nil, false
+	}
+
 	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
 	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
 
@@ -243,12 +337,14 @@ func matchPath(pattern, requestPath string) (map[string]string, bool) {
 
 // handleNotFound handles 404 responses
 func (h *MockHandler) handleNotFound(c *gin.Context, cfg *config.Config) {
-	// Check for custom 404 response
-	if file, ok := cfg.Server.ErrorHandling.CustomErrorResponses[404]; ok {
-		content, err := os.ReadFile(file)
-		if err == nil {
-			c.Data(http.StatusNotFound, "application/json", content)
-			return
+	if cfg != nil {
+		// Check for custom 404 response
+		if file, ok := cfg.Server.ErrorHandling.CustomErrorResponses[404]; ok {
+			content, err := os.ReadFile(file)
+			if err == nil {
+				c.Data(http.StatusNotFound, "application/json", content)
+				return
+			}
 		}
 	}
 
@@ -263,12 +359,14 @@ func (h *MockHandler) handleNotFound(c *gin.Context, cfg *config.Config) {
 
 // handleError handles internal errors
 func (h *MockHandler) handleError(c *gin.Context, cfg *config.Config, err error) {
-	// Check for custom 500 response
-	if file, ok := cfg.Server.ErrorHandling.CustomErrorResponses[500]; ok {
-		content, readErr := os.ReadFile(file)
-		if readErr == nil {
-			c.Data(http.StatusInternalServerError, "application/json", content)
-			return
+	if cfg != nil {
+		// Check for custom 500 response
+		if file, ok := cfg.Server.ErrorHandling.CustomErrorResponses[500]; ok {
+			content, readErr := os.ReadFile(file)
+			if readErr == nil {
+				c.Data(http.StatusInternalServerError, "application/json", content)
+				return
+			}
 		}
 	}
 
@@ -279,7 +377,7 @@ func (h *MockHandler) handleError(c *gin.Context, cfg *config.Config, err error)
 		},
 	}
 
-	if cfg.Server.ErrorHandling.ShowDetails {
+	if cfg != nil && cfg.Server.ErrorHandling.ShowDetails {
 		response["error"].(gin.H)["details"] = err.Error()
 	}
 
@@ -326,7 +424,7 @@ func extractPathParams(pattern, value string) map[string]string {
 	paramNames := []string{}
 
 	// Find all :param patterns
-	re := regexp.MustCompile(`:(\w+)`)
+	re := regexp.MustCompile(`:(\\w+)`)
 	matches := re.FindAllStringSubmatch(pattern, -1)
 	for _, match := range matches {
 		if len(match) > 1 {

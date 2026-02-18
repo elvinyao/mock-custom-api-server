@@ -18,10 +18,11 @@ func NewResponseBuilder() *ResponseBuilder {
 
 // ResponseResult contains the built response data
 type ResponseResult struct {
-	Body       []byte
-	StatusCode int
-	Headers    map[string]string
-	DelayMs    int
+	Body        []byte
+	StatusCode  int
+	Headers     map[string]string
+	DelayMs     int
+	ContentType string
 }
 
 // RandomResponseConfig represents a random response configuration
@@ -38,7 +39,9 @@ type ResponseBuildConfig struct {
 	StatusCode      int
 	DelayMs         int
 	Headers         map[string]string
+	ContentType     string
 	TemplateEnabled bool
+	TemplateEngine  string // "simple" | "go"
 	RandomResponses []RandomResponseConfig
 }
 
@@ -67,7 +70,11 @@ func (rb *ResponseBuilder) Build(cfg ResponseBuildConfig, values map[string]stri
 
 	// Apply template substitution
 	if cfg.TemplateEnabled && len(result.Body) > 0 {
-		result.Body = template.ReplaceVariables(result.Body, values)
+		engine := cfg.TemplateEngine
+		if engine == "" {
+			engine = "simple"
+		}
+		result.Body = template.ReplaceVariablesWithEngine(result.Body, values, engine)
 	}
 
 	// Set status code
@@ -79,12 +86,25 @@ func (rb *ResponseBuilder) Build(cfg ResponseBuildConfig, values map[string]stri
 	// Set delay
 	result.DelayMs = cfg.DelayMs
 
-	// Merge headers
-	result.Headers["Content-Type"] = "application/json"
+	// Determine content type
+	contentType := cfg.ContentType
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	result.ContentType = contentType
+
+	// Set Content-Type header first (can be overridden by explicit headers)
+	result.Headers["Content-Type"] = contentType
+
+	// Merge additional headers
 	for k, v := range cfg.Headers {
 		// Apply template to header values too
 		if cfg.TemplateEnabled {
-			v = string(template.ReplaceVariables([]byte(v), values))
+			engine := cfg.TemplateEngine
+			if engine == "" {
+				engine = "simple"
+			}
+			v = string(template.ReplaceVariablesWithEngine([]byte(v), values, engine))
 		}
 		result.Headers[k] = v
 	}

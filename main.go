@@ -6,9 +6,14 @@ import (
 	"log"
 	"os"
 
+	"mock-api-server/admin"
 	"mock-api-server/config"
 	"mock-api-server/handler"
+	"mock-api-server/metrics"
 	"mock-api-server/middleware"
+	"mock-api-server/recorder"
+	"mock-api-server/state"
+	"mock-api-server/ui"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,10 +60,37 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Create Gin router
+	// ── New subsystems ──────────────────────────────────────────────────────
+
+	// Shared state store (scenarios)
+	stateStore := state.New()
+
+	// Metrics store
+	metricsStore := metrics.New()
+
+	// Request recorder (if enabled)
+	var rec *recorder.Recorder
+	recordingCfg := cfg.Server.Recording
+	if recordingCfg.Enabled {
+		maxEntries := recordingCfg.MaxEntries
+		if maxEntries <= 0 {
+			maxEntries = 1000
+		}
+		rec = recorder.New(maxEntries)
+		startupLogger.Printf("Request recording enabled (max %d entries)", maxEntries)
+	}
+
+	// ── Router setup ────────────────────────────────────────────────────────
+
 	router := gin.New()
 
-	// Add middleware
+	// 1. CORS (must be first)
+	if cfg.Server.CORS.Enabled {
+		router.Use(middleware.CORS(cfg.Server.CORS))
+		startupLogger.Printf("CORS enabled")
+	}
+
+	// 2. Logging / Recovery
 	if zapLogger != nil {
 		router.Use(middleware.Logger(zapLogger, cfg.Server.Logging.AccessLog))
 		router.Use(middleware.Recovery(zapLogger, cfg.Server.ErrorHandling.ShowDetails))
@@ -67,7 +99,20 @@ func main() {
 		router.Use(gin.Recovery())
 	}
 
-	// Register health check endpoint if enabled
+	// 3. Metrics collection
+	excludePaths := buildExcludePaths(cfg)
+	router.Use(middleware.Metrics(metricsStore, excludePaths))
+
+	// 4. Request recording
+	if rec != nil {
+		maxBodyBytes := recordingCfg.MaxBodyBytes
+		if maxBodyBytes <= 0 {
+			maxBodyBytes = 65536
+		}
+		router.Use(middleware.RequestRecorder(rec, maxBodyBytes, excludePaths))
+	}
+
+	// ── Health check ────────────────────────────────────────────────────────
 	if cfg.HealthCheck.Enabled {
 		healthPath := cfg.HealthCheck.Path
 		if healthPath == "" {
@@ -77,11 +122,28 @@ func main() {
 		startupLogger.Printf("Health check endpoint registered at: %s", healthPath)
 	}
 
-	// Create and register mock handler
-	mockHandler := handler.NewMockHandler(cfgManager)
+	// ── Admin API ───────────────────────────────────────────────────────────
+	adminCfg := cfg.Server.AdminAPI
+	adminPrefix := "/mock-admin"
+	if adminCfg.Prefix != "" {
+		adminPrefix = adminCfg.Prefix
+	}
+
+	if adminCfg.Enabled {
+		adminHandler := admin.New(cfgManager, rec, metricsStore, stateStore)
+		adminHandler.RegisterRoutes(router, adminPrefix, adminCfg.Auth)
+		startupLogger.Printf("Admin API enabled at: %s", adminPrefix)
+
+		// Web UI under admin prefix
+		ui.RegisterRoutes(router, adminPrefix+"/ui")
+		startupLogger.Printf("Web UI available at: %s/ui/", adminPrefix)
+	}
+
+	// ── Mock handler ────────────────────────────────────────────────────────
+	mockHandler := handler.NewMockHandlerWithState(cfgManager, stateStore)
 	mockHandler.RegisterRoutes(router)
 
-	// Start config watcher if hot reload is enabled
+	// ── Config watcher (hot reload) ─────────────────────────────────────────
 	if cfg.Server.HotReload {
 		stdLogger := log.New(os.Stdout, "[CONFIG] ", log.LstdFlags)
 		watcher := config.NewWatcher(*configPath, cfgManager, stdLogger)
@@ -90,7 +152,7 @@ func main() {
 		startupLogger.Printf("Hot reload enabled, watching: %s", *configPath)
 	}
 
-	// Start server
+	// ── Start server ────────────────────────────────────────────────────────
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	startupLogger.Printf("Starting Mock API Server on %s", addr)
 	startupLogger.Printf("Loaded %d endpoint(s)", len(cfg.Endpoints))
@@ -98,4 +160,14 @@ func main() {
 	if err := router.Run(addr); err != nil {
 		startupLogger.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+// buildExcludePaths returns paths that should be excluded from metrics/recording
+func buildExcludePaths(cfg *config.Config) []string {
+	exclude := cfg.Server.Recording.ExcludePaths
+	if len(exclude) == 0 {
+		// Sensible defaults
+		exclude = []string{"/health", "/mock-admin/"}
+	}
+	return exclude
 }
