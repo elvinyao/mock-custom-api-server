@@ -1,0 +1,5 @@
+{
+  "session_id": "{{.session_id}}",
+  "current_step": "confirmed",
+  "message": "Order confirmed and being prepared for shipment"
+}

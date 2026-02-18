@@ -1,0 +1,7 @@
+{
+  "session_id": "{{.session_id}}",
+  "status": "confirmed",
+  "order_number": "ORD-{{.request_id}}",
+  "message": "Order confirmed and will be shipped soon",
+  "confirmed_at": "{{.timestamp}}"
+}

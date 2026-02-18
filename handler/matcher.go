@@ -19,6 +19,12 @@ type ConditionGroup struct {
 	Conditions []Condition
 }
 
+// TemplateConfig holds template settings for a rule
+type TemplateConfig struct {
+	Enabled bool
+	Engine  string // "simple" | "go"
+}
+
 // Rule represents a matching rule with conditions and response
 type Rule struct {
 	ConditionLogic  string // "and" (default) | "or"
@@ -33,6 +39,7 @@ type Rule struct {
 	DelayMs      int
 	Headers      map[string]string
 	ContentType  string
+	Template     *TemplateConfig
 }
 
 // MatchRules finds the first matching rule based on extracted values

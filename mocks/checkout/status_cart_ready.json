@@ -1,0 +1,6 @@
+{
+  "session_id": "{{.session_id}}",
+  "current_step": "cart_ready",
+  "message": "Cart is ready, waiting for payment info",
+  "next_action": "POST /api/v1/checkout/payment"
+}

@@ -159,13 +159,19 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 
 	if matchedRule != nil {
 		matchedRuleName = fmt.Sprintf("rule_%d", getRuleIndex(rules, matchedRule))
+		ruleTemplateEnabled := matchedRule.Template != nil && matchedRule.Template.Enabled
+		ruleTemplateEngine := "simple"
+		if ruleTemplateEnabled && matchedRule.Template.Engine != "" {
+			ruleTemplateEngine = matchedRule.Template.Engine
+		}
 		respCfg = ResponseBuildConfig{
 			ResponseFile:    matchedRule.ResponseFile,
 			StatusCode:      matchedRule.StatusCode,
 			DelayMs:         matchedRule.DelayMs,
 			Headers:         matchedRule.Headers,
 			ContentType:     matchedRule.ContentType,
-			TemplateEnabled: false,
+			TemplateEnabled: ruleTemplateEnabled,
+			TemplateEngine:  ruleTemplateEngine,
 		}
 	} else {
 		matchedRuleName = "default"
@@ -256,6 +262,13 @@ func convertRules(cfgRules []config.Rule) []Rule {
 				Conditions: gConds,
 			}
 		}
+		var tmplCfg *TemplateConfig
+		if r.Template != nil {
+			tmplCfg = &TemplateConfig{
+				Enabled: r.Template.Enabled,
+				Engine:  r.Template.Engine,
+			}
+		}
 		rules[i] = Rule{
 			ConditionLogic:  r.ConditionLogic,
 			Conditions:      conditions,
@@ -267,6 +280,7 @@ func convertRules(cfgRules []config.Rule) []Rule {
 			DelayMs:         r.DelayMs,
 			Headers:         r.Headers,
 			ContentType:     r.ContentType,
+			Template:        tmplCfg,
 		}
 	}
 	return rules
