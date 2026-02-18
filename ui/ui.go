@@ -21,18 +21,22 @@ func RegisterRoutes(r *gin.Engine, prefix string) {
 
 	fileServer := http.FileServer(http.FS(subFS))
 
-	// Serve index.html at the prefix root
+	// Redirect bare prefix (no trailing slash) to prefix/
 	r.GET(prefix, func(c *gin.Context) {
 		c.Redirect(http.StatusFound, prefix+"/")
 	})
-	r.GET(prefix+"/", func(c *gin.Context) {
-		c.FileFromFS("index.html", http.FS(subFS))
-	})
 
-	// Serve all other static assets
+	// Single catch-all handler covers both "/" and any asset path.
+	// Gin sets *filepath to "/" when the URL is exactly prefix+"/",
+	// so we serve index.html for "/" and delegate everything else to
+	// the embedded file server.
 	r.GET(prefix+"/*filepath", func(c *gin.Context) {
-		filepath := c.Param("filepath")
-		c.Request.URL.Path = filepath
+		p := c.Param("filepath")
+		if p == "/" || p == "" {
+			c.FileFromFS("index.html", http.FS(subFS))
+			return
+		}
+		c.Request.URL.Path = p
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 }
