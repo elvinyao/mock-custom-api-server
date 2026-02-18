@@ -5,6 +5,6 @@
     "groupid": 99999,
     "qe-timing-list-id": 21,
     "timingname": "baba",
-    "pageurl": "https://env01.test.com/wiki/action.asp?pageId=1234"
+    "pageurl": "http://localhost:8080/wiki/pages/viewpage.action?pageId=1234"
   }
 ]
