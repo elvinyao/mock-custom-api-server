@@ -27,13 +27,18 @@ func RegisterRoutes(r *gin.Engine, prefix string) {
 	})
 
 	// Single catch-all handler covers both "/" and any asset path.
-	// Gin sets *filepath to "/" when the URL is exactly prefix+"/",
-	// so we serve index.html for "/" and delegate everything else to
-	// the embedded file server.
+	// Do NOT use c.FileFromFS for index.html: http.FileServer redirects
+	// any path ending in "/index.html" to "./" which creates a 301 loop.
+	// Instead, read and write the bytes directly for the root case.
 	r.GET(prefix+"/*filepath", func(c *gin.Context) {
 		p := c.Param("filepath")
 		if p == "/" || p == "" {
-			c.FileFromFS("index.html", http.FS(subFS))
+			content, err := staticFiles.ReadFile("static/index.html")
+			if err != nil {
+				c.Status(http.StatusNotFound)
+				return
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 			return
 		}
 		c.Request.URL.Path = p
