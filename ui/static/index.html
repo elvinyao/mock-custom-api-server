@@ -26,7 +26,7 @@
     <div class="max-w-7xl mx-auto px-4 flex space-x-2">
       <template x-for="tab in tabs" :key="tab">
         <button
-          @click="activeTab = tab"
+          @click="switchTab(tab)"
           :class="activeTab === tab
             ? 'border-b-2 border-indigo-600 text-indigo-600 font-semibold'
             : 'text-gray-500 hover:text-gray-700'"
@@ -284,6 +284,20 @@
         async init() {
           await this.fetchAll();
           setInterval(() => this.fetchHealth(), 10000);
+          // Auto-refresh requests every 5 s when the requests tab is active
+          setInterval(() => {
+            if (this.activeTab === 'requests') this.fetchRequests();
+          }, 5000);
+        },
+
+        switchTab(tab) {
+          this.activeTab = tab;
+          // Refresh the relevant data immediately on tab switch
+          if (tab === 'requests') this.fetchRequests();
+          else if (tab === 'endpoints') this.fetchEndpoints();
+          else if (tab === 'scenarios') this.fetchScenarios();
+          else if (tab === 'metrics') this.fetchMetrics();
+          else if (tab === 'config') this.fetchConfig();
         },
 
         async fetchAll() {
