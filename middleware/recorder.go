@@ -23,8 +23,11 @@ func (w *bodyWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-// RequestRecorder returns a middleware that records requests/responses into the store
-func RequestRecorder(rec *recorder.Recorder, maxBodyBytes int, excludePaths []string) gin.HandlerFunc {
+// RequestRecorder returns a middleware that records requests/responses into the store.
+// recordBody controls whether request/response bodies are captured.
+// maxBodyBytes limits how many bytes are stored per body (the full body is always
+// forwarded to downstream handlers unchanged).
+func RequestRecorder(rec *recorder.Recorder, recordBody bool, maxBodyBytes int, excludePaths []string) gin.HandlerFunc {
 	if rec == nil {
 		return func(c *gin.Context) { c.Next() }
 	}
@@ -45,16 +48,27 @@ func RequestRecorder(rec *recorder.Recorder, maxBodyBytes int, excludePaths []st
 
 		start := time.Now()
 
-		// Read request body (with limit)
+		// Read full request body so downstream handlers (e.g. proxy) receive it intact,
+		// then store a (possibly truncated) copy for recording.
 		var reqBody string
-		if c.Request.Body != nil && c.Request.Body != http.NoBody {
-			limited := io.LimitReader(c.Request.Body, int64(maxBodyBytes))
-			bodyBytes, err := io.ReadAll(limited)
+		if recordBody && c.Request.Body != nil && c.Request.Body != http.NoBody {
+			fullBytes, err := io.ReadAll(c.Request.Body)
 			if err == nil {
-				reqBody = string(bodyBytes)
+				// Restore the full body for downstream handlers
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(fullBytes))
+				// Store truncated version for recording
+				if len(fullBytes) > maxBodyBytes {
+					reqBody = string(fullBytes[:maxBodyBytes]) + "...[truncated]"
+				} else {
+					reqBody = string(fullBytes)
+				}
 			}
-			// Restore body for downstream handlers
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		} else if c.Request.Body != nil && c.Request.Body != http.NoBody {
+			// Not recording body, but still need to make body re-readable for downstream
+			fullBytes, err := io.ReadAll(c.Request.Body)
+			if err == nil {
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(fullBytes))
+			}
 		}
 
 		// Wrap response writer to capture body
@@ -89,10 +103,13 @@ func RequestRecorder(rec *recorder.Recorder, maxBodyBytes int, excludePaths []st
 			}
 		}
 
-		// Capture response body (truncate if too large)
-		respBodyStr := bw.body.String()
-		if len(respBodyStr) > maxBodyBytes {
-			respBodyStr = respBodyStr[:maxBodyBytes] + "...[truncated]"
+		// Capture response body (truncate stored copy if too large)
+		var respBodyStr string
+		if recordBody {
+			respBodyStr = bw.body.String()
+			if len(respBodyStr) > maxBodyBytes {
+				respBodyStr = respBodyStr[:maxBodyBytes] + "...[truncated]"
+			}
 		}
 
 		entry := &recorder.RecordedRequest{

@@ -109,7 +109,7 @@ func main() {
 		if maxBodyBytes <= 0 {
 			maxBodyBytes = 65536
 		}
-		router.Use(middleware.RequestRecorder(rec, maxBodyBytes, excludePaths))
+		router.Use(middleware.RequestRecorder(rec, recordingCfg.RecordBody, maxBodyBytes, excludePaths))
 	}
 
 	// ── Health check ────────────────────────────────────────────────────────
