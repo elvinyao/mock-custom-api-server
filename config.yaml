@@ -50,3 +50,4 @@ endpoints:
     - "./config/endpoints/apex_tasks.yaml"
     - "./config/endpoints/checkout.yaml"
     - "./config/endpoints/proxy_example.yaml"
+    - "./config/endpoints/confluence_jira.yaml"
