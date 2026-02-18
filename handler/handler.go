@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"mock-api-server/config"
+	"mock-api-server/proxy"
 	"mock-api-server/state"
 
 	"github.com/gin-gonic/gin"
@@ -106,6 +107,15 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 	// Store path params in context
 	for k, v := range pathParams {
 		c.Params = append(c.Params, gin.Param{Key: k, Value: v})
+	}
+
+	// Proxy mode: forward to upstream, fall back to mock rules only if configured
+	if strings.EqualFold(endpoint.Mode, "proxy") {
+		proxyHandler := proxy.New()
+		if proxyHandler.ProxyRequest(c, *endpoint) {
+			return // handled by proxy (success or non-fallback error)
+		}
+		// fallback_on_error=true and upstream failed: continue to mock rules below
 	}
 
 	// Read body for potential reuse

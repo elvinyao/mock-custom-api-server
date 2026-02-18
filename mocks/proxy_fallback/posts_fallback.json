@@ -1,0 +1,8 @@
+[
+  {
+    "userId": 1,
+    "id": 1,
+    "title": "[FALLBACK] upstream unavailable",
+    "body": "This is a cached fallback response because the upstream API could not be reached."
+  }
+]

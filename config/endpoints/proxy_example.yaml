@@ -1,0 +1,66 @@
+# Proxy Mode Examples
+#
+# mode: "proxy" forwards the request to a real upstream API.
+#
+# Key options:
+#   target          — upstream base URL (required)
+#   strip_prefix    — remove this prefix from the path before forwarding
+#   timeout_ms      — upstream timeout (default 30s)
+#   record          — save each interaction as a YAML stub + JSON file
+#   record_dir      — directory to write recorded stubs
+#   fallback_on_error — if true, fall through to mock rules when upstream fails
+#   headers         — extra headers injected into every upstream request
+#
+# Three patterns shown below:
+#   1. Pure transparent proxy   — just forward, no fallback
+#   2. Proxy + record stubs     — forward and save responses for offline replay
+#   3. Proxy with mock fallback — use real API when available, local mock otherwise
+
+endpoints:
+
+  # ── 1. Pure transparent proxy ──────────────────────────────────────────────
+  # Forwards /proxy/posts/* to https://jsonplaceholder.typicode.com/posts/*
+  # curl http://localhost:8080/proxy/posts
+  # curl http://localhost:8080/proxy/posts/1
+  - path: "/proxy/posts/*"
+    method: "ANY"
+    description: "Transparent proxy → jsonplaceholder /posts"
+    mode: "proxy"
+    proxy:
+      target: "https://jsonplaceholder.typicode.com"
+      strip_prefix: "/proxy"      # /proxy/posts/1 → /posts/1 upstream
+      timeout_ms: 5000
+
+  # ── 2. Proxy + record stubs ────────────────────────────────────────────────
+  # Forwards to a real API AND saves each response as a YAML stub.
+  # After a few calls, ./recorded/ will contain ready-to-use mock files.
+  # curl http://localhost:8080/record/users/1
+  - path: "/record/users/*"
+    method: "ANY"
+    description: "Proxy → jsonplaceholder /users  (records stubs to ./recorded/)"
+    mode: "proxy"
+    proxy:
+      target: "https://jsonplaceholder.typicode.com"
+      strip_prefix: "/record"     # /record/users/1 → /users/1 upstream
+      timeout_ms: 5000
+      record: true
+      record_dir: "./recorded"
+
+  # ── 3. Proxy with mock fallback ────────────────────────────────────────────
+  # Tries the real API first; if it fails (network error, timeout, 5xx)
+  # falls back to the local mock rules defined below.
+  # To test the fallback, set target to an unreachable host.
+  # curl http://localhost:8080/resilient/posts
+  - path: "/resilient/posts"
+    method: "GET"
+    description: "Proxy → jsonplaceholder with local fallback on error"
+    mode: "proxy"
+    proxy:
+      target: "https://jsonplaceholder.typicode.com"
+      strip_prefix: "/resilient"  # /resilient/posts → /posts upstream
+      timeout_ms: 3000
+      fallback_on_error: true     # if upstream fails, use rules/default below
+    rules: []
+    default:
+      response_file: "./mocks/proxy_fallback/posts_fallback.json"
+      status_code: 200
