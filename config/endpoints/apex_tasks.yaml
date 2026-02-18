@@ -51,7 +51,7 @@ paths:
       # APEX API - Report task result
       # ============================================================
   - path: "/task_result"
-    method: "POST"
+    method: "PUT"
     description: "Receives task execution results from cdrs-bot"
 
     selectors:
