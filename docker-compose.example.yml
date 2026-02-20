@@ -2,10 +2,10 @@ version: "3.9"
 
 services:
   mock-api-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/elvinyao/mock-custom-api-server:latest
     container_name: mock-api-server
+    expose:
+      - "8080"
     ports:
       - "8080:8080"
     restart: unless-stopped
