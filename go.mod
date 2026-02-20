@@ -1,6 +1,6 @@
 module mock-api-server
 
-go 1.24.3
+go 1.26
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
