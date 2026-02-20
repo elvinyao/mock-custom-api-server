@@ -1,0 +1,9 @@
+.git
+.gitignore
+.vscode
+.claude
+.serena
+__debug_bin*
+*.md
+*_test.go
+tests

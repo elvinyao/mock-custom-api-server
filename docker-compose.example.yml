@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  mock-api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mock-api-server
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    command: ["/app/mock-api-server", "-config", "/app/config.yaml"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./config:/app/config:ro
+      - ./mocks:/app/mocks:ro
+      - ./recorded:/app/recorded
+      - ./logs:/app/logs
