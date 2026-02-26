@@ -373,6 +373,7 @@
     function dashboard() {
       const base = getAdminBase();
       return {
+        base,
         tabs: ['endpoints', 'requests', 'metrics', 'config'],
         activeTab: 'endpoints',
         endpoints: [],
