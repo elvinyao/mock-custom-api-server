@@ -8,25 +8,26 @@
   <style>
     html { box-sizing: border-box; overflow-y: scroll; }
     body { margin: 0; background: #fafafa; }
-    /* Compact top bar */
+    /* Top bar — mirrors the admin dashboard header (bg-gray-800 theme) */
     #top-bar {
-      background: #1f2937;
-      color: #e5e7eb;
+      background: #1f2937;   /* bg-gray-800  */
+      color: #e5e7eb;        /* text-gray-200 */
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 10px 20px;
-      font-family: sans-serif;
-      font-size: 14px;
+      gap: 12px;             /* gap-3 */
+      padding: 10px 20px;   /* py-2.5 px-5 */
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px;       /* text-sm */
     }
     #top-bar a {
-      color: #93c5fd;
+      color: #93c5fd;        /* text-blue-300 */
       text-decoration: none;
-      font-size: 13px;
+      font-size: 13px;       /* text-[13px] */
     }
     #top-bar a:hover { text-decoration: underline; }
-    #top-bar .title { font-weight: 600; font-size: 15px; color: #f9fafb; }
-    #top-bar .sep { color: #6b7280; }
+    #top-bar .title   { font-weight: 600; font-size: 15px; color: #f9fafb; } /* text-gray-50 */
+    #top-bar .current { color: #d1d5db; }  /* text-gray-300, same as index.html */
+    #top-bar .sep     { color: #6b7280; }  /* text-gray-500 */
     #swagger-ui .topbar { display: none; }
   </style>
 </head>
@@ -35,7 +36,7 @@
 <div id="top-bar">
   <span class="title">Mock API Server</span>
   <span class="sep">|</span>
-  <span>Swagger UI</span>
+  <span class="current">Swagger UI</span>
   <span class="sep">·</span>
   <a id="admin-link" href="#">Admin Dashboard ↗</a>
   <span class="sep">·</span>
