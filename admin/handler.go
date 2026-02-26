@@ -21,6 +21,7 @@ type Handler struct {
 	metrics       *metrics.Store
 	stateStore    *state.ScenarioStore
 	startTime     time.Time
+	onReload      func() // optional callback invoked after a manual config reload
 }
 
 // New creates a new admin Handler
@@ -37,6 +38,12 @@ func New(
 		stateStore:    stateStore,
 		startTime:     time.Now(),
 	}
+}
+
+// SetReloadCallback registers a function to be called after every successful
+// manual config reload (POST /config/reload). Use it to flush caches etc.
+func (h *Handler) SetReloadCallback(fn func()) {
+	h.onReload = fn
 }
 
 // ipAllowlist returns a middleware that restricts access to the listed CIDR/IP

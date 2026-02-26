@@ -29,6 +29,9 @@ func (h *Handler) postConfigReload(c *gin.Context) {
 		return
 	}
 	h.configManager.SetConfig(cfg)
+	if h.onReload != nil {
+		h.onReload()
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Configuration reloaded",
 		"endpoints_count": len(cfg.Endpoints),

@@ -131,6 +131,7 @@ func main() {
 
 	if adminCfg.Enabled {
 		adminHandler := admin.New(cfgManager, rec, metricsStore, stateStore)
+		adminHandler.SetReloadCallback(handler.ClearFileCache)
 		adminHandler.RegisterRoutes(router, adminPrefix, adminCfg.Auth)
 		startupLogger.Printf("Admin API enabled at: %s", adminPrefix)
 
