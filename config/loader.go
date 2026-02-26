@@ -26,6 +26,12 @@ type endpointFileConfig struct {
 	Endpoints []Endpoint `yaml:"endpoints"`
 }
 
+// expandEnvVars replaces ${VAR} and $VAR patterns in s with the corresponding
+// environment variable values. Unset variables are replaced with an empty string.
+func expandEnvVars(s string) string {
+	return os.Expand(s, os.Getenv)
+}
+
 // LoadConfig loads configuration from a YAML file
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -33,8 +39,11 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Expand ${ENV_VAR} references before YAML parsing
+	expanded := expandEnvVars(string(data))
+
 	var raw rawConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 

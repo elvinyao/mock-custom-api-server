@@ -35,6 +35,7 @@ type Rule struct {
 	NextStep     string
 	// Response fields
 	ResponseFile string
+	InlineBody   string
 	StatusCode   int
 	DelayMs      int
 	Headers      map[string]string

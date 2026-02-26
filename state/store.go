@@ -48,6 +48,14 @@ func (s *ScenarioStore) SetStep(scenario, partitionValue, step string) {
 	s.steps[key] = step
 }
 
+// ResetPartition resets only the entry for a specific scenario + partition key.
+// The step is removed (next request will start from "idle").
+func (s *ScenarioStore) ResetPartition(scenario, partitionValue string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.steps, buildKey(scenario, partitionValue))
+}
+
 // ResetScenario resets all entries for a given scenario name
 func (s *ScenarioStore) ResetScenario(scenario string) {
 	s.mu.Lock()

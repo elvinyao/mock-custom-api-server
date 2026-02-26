@@ -16,6 +16,8 @@ type Watcher struct {
 	mu         sync.RWMutex
 	stopCh     chan struct{}
 	logger     *log.Logger
+	// OnReload is called after every successful config reload (e.g. to flush caches).
+	OnReload func()
 }
 
 // NewWatcher creates a new config watcher
@@ -131,6 +133,9 @@ func (w *Watcher) reloadConfig(watcher *fsnotify.Watcher, watchedPaths map[strin
 	// Update config
 	w.manager.SetConfig(newCfg)
 	w.watchEndpointConfigFiles(watcher, watchedPaths, newCfg)
+	if w.OnReload != nil {
+		w.OnReload()
+	}
 	w.logger.Printf("[INFO] Configuration reloaded successfully at %s", time.Now().Format(time.RFC3339))
 }
 

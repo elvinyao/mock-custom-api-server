@@ -25,6 +25,14 @@ type ServerConfig struct {
 	CORS              CORSConfig      `yaml:"cors"                json:"cors"`
 	AdminAPI          AdminAPIConfig  `yaml:"admin_api"           json:"admin_api"`
 	Recording         RecordingConfig `yaml:"recording"           json:"recording"`
+	TLS               TLSConfig       `yaml:"tls"                 json:"tls"`
+}
+
+// TLSConfig holds TLS/HTTPS settings.
+type TLSConfig struct {
+	Enabled  bool   `yaml:"enabled"   json:"enabled"`
+	CertFile string `yaml:"cert_file" json:"cert_file"`
+	KeyFile  string `yaml:"key_file"  json:"key_file"`
 }
 
 type LoggingConfig struct {
@@ -60,9 +68,10 @@ type AdminAPIConfig struct {
 }
 
 type AdminAuth struct {
-	Enabled  bool   `yaml:"enabled"  json:"enabled"`
-	Username string `yaml:"username" json:"username"`
-	Password string `yaml:"password" json:"-"` // never expose password in API
+	Enabled       bool     `yaml:"enabled"        json:"enabled"`
+	Username      string   `yaml:"username"       json:"username"`
+	Password      string   `yaml:"password"       json:"-"` // never expose password in API
+	AllowedIPs    []string `yaml:"allowed_ips"    json:"allowed_ips,omitempty"`
 }
 
 // ==================== Recording Config ====================
@@ -131,6 +140,9 @@ type Condition struct {
 
 type ResponseConfig struct {
 	ResponseFile    string            `yaml:"response_file,omitempty"    json:"response_file,omitempty"`
+	// InlineBody allows embedding the response body directly in the YAML config,
+	// avoiding the need for a separate JSON/text file for simple responses.
+	InlineBody      string            `yaml:"inline_body,omitempty"      json:"inline_body,omitempty"`
 	StatusCode      int               `yaml:"status_code"                json:"status_code"`
 	DelayMs         int               `yaml:"delay_ms,omitempty"         json:"delay_ms,omitempty"`
 	Headers         map[string]string `yaml:"headers,omitempty"          json:"headers,omitempty"`

@@ -19,18 +19,29 @@ func (h *Handler) listScenarios(c *gin.Context) {
 	})
 }
 
-// resetScenario resets all state for a given scenario name
+// resetScenario resets state for a given scenario name.
+// If the query param ?partition_key=<value> is provided, only that specific
+// partition is reset; otherwise all partitions for the scenario are cleared.
 func (h *Handler) resetScenario(c *gin.Context) {
 	name := c.Param("name")
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "scenario name required"})
 		return
 	}
+	partitionKey := c.Query("partition_key")
 	if h.stateStore != nil {
-		h.stateStore.ResetScenario(name)
+		if partitionKey != "" {
+			h.stateStore.ResetPartition(name, partitionKey)
+		} else {
+			h.stateStore.ResetScenario(name)
+		}
 	}
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"message":  "Scenario reset",
 		"scenario": name,
-	})
+	}
+	if partitionKey != "" {
+		resp["partition_key"] = partitionKey
+	}
+	c.JSON(http.StatusOK, resp)
 }

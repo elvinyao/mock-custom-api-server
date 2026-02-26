@@ -15,6 +15,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// sharedTransport is a reusable Transport with connection pooling.
+var sharedTransport = &http.Transport{
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 20,
+	IdleConnTimeout:     90 * time.Second,
+}
+
 // Handler handles proxying requests to upstream targets
 type Handler struct{}
 
@@ -93,8 +100,8 @@ func (h *Handler) ProxyRequest(c *gin.Context, ep config.Endpoint) bool {
 	// Fix Host header
 	upstreamReq.Host = targetURL.Host
 
-	// Execute
-	client := &http.Client{Timeout: timeout}
+	// Execute using a shared client with connection pooling
+	client := &http.Client{Timeout: timeout, Transport: sharedTransport}
 	resp, err := client.Do(upstreamReq)
 	if err != nil {
 		if cfg.FallbackOnError {

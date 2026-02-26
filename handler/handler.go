@@ -51,10 +51,10 @@ func (h *MockHandler) RegisterRoutes(r *gin.Engine) {
 	endpoints := h.configManager.GetAllEndpoints()
 	h.registerEndpoints(r, endpoints)
 
-	// Set NoRoute handler for 404
-	r.NoRoute(func(c *gin.Context) {
-		h.handleNotFound(c, h.configManager.GetConfig())
-	})
+	// NoRoute catches any path not registered at startup (e.g. added via hot reload
+	// or the runtime endpoint API). handleRequest already calls findEndpoint which
+	// consults the live config, so newly added paths are matched correctly here too.
+	r.NoRoute(h.handleRequest)
 }
 
 func (h *MockHandler) registerEndpoints(r *gin.Engine, endpoints []config.Endpoint) {
@@ -179,6 +179,7 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 		}
 		respCfg = ResponseBuildConfig{
 			ResponseFile:    matchedRule.ResponseFile,
+			InlineBody:      matchedRule.InlineBody,
 			StatusCode:      matchedRule.StatusCode,
 			DelayMs:         matchedRule.DelayMs,
 			Headers:         matchedRule.Headers,
@@ -195,6 +196,7 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 		}
 		respCfg = ResponseBuildConfig{
 			ResponseFile:    endpoint.Default.ResponseFile,
+			InlineBody:      endpoint.Default.InlineBody,
 			StatusCode:      endpoint.Default.StatusCode,
 			DelayMs:         endpoint.Default.DelayMs,
 			Headers:         endpoint.Default.Headers,
@@ -289,6 +291,7 @@ func convertRules(cfgRules []config.Rule) []Rule {
 			ScenarioStep:    r.ScenarioStep,
 			NextStep:        r.NextStep,
 			ResponseFile:    r.ResponseFile,
+			InlineBody:      r.InlineBody,
 			StatusCode:      r.StatusCode,
 			DelayMs:         r.DelayMs,
 			Headers:         r.Headers,

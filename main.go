@@ -147,6 +147,7 @@ func main() {
 	if cfg.Server.HotReload {
 		stdLogger := log.New(os.Stdout, "[CONFIG] ", log.LstdFlags)
 		watcher := config.NewWatcher(*configPath, cfgManager, stdLogger)
+		watcher.OnReload = handler.ClearFileCache
 		watcher.Start(cfg.Server.ReloadIntervalSec)
 		defer watcher.Stop()
 		startupLogger.Printf("Hot reload enabled, watching: %s", *configPath)
@@ -157,17 +158,37 @@ func main() {
 	startupLogger.Printf("Starting Mock API Server on %s", addr)
 	startupLogger.Printf("Loaded %d endpoint(s)", len(cfg.Endpoints))
 
-	if err := router.Run(addr); err != nil {
-		startupLogger.Fatalf("Failed to start server: %v", err)
+	tlsCfg := cfg.Server.TLS
+	if tlsCfg.Enabled {
+		if tlsCfg.CertFile == "" || tlsCfg.KeyFile == "" {
+			startupLogger.Fatalf("TLS enabled but cert_file or key_file is missing")
+		}
+		startupLogger.Printf("TLS enabled (cert: %s)", tlsCfg.CertFile)
+		if err := router.RunTLS(addr, tlsCfg.CertFile, tlsCfg.KeyFile); err != nil {
+			startupLogger.Fatalf("Failed to start TLS server: %v", err)
+		}
+	} else {
+		if err := router.Run(addr); err != nil {
+			startupLogger.Fatalf("Failed to start server: %v", err)
+		}
 	}
 }
 
-// buildExcludePaths returns paths that should be excluded from metrics/recording
+// buildExcludePaths returns paths that should be excluded from metrics/recording.
+// Falls back to sensible defaults derived from the actual config values so that
+// a custom admin prefix or health path is correctly excluded.
 func buildExcludePaths(cfg *config.Config) []string {
 	exclude := cfg.Server.Recording.ExcludePaths
 	if len(exclude) == 0 {
-		// Sensible defaults
-		exclude = []string{"/health", "/mock-admin/"}
+		adminPrefix := cfg.Server.AdminAPI.Prefix
+		if adminPrefix == "" {
+			adminPrefix = "/mock-admin"
+		}
+		healthPath := cfg.HealthCheck.Path
+		if healthPath == "" {
+			healthPath = "/health"
+		}
+		exclude = []string{healthPath, adminPrefix + "/"}
 	}
 	return exclude
 }

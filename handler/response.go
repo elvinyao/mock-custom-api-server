@@ -3,10 +3,35 @@ package handler
 import (
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"mock-api-server/pkg/template"
 )
+
+// fileCache holds response file contents to avoid repeated disk reads.
+var fileCache sync.Map
+
+// ClearFileCache removes all cached response file contents.
+// Call this after a config reload so updated files are picked up.
+func ClearFileCache() {
+	fileCache.Range(func(k, _ any) bool {
+		fileCache.Delete(k)
+		return true
+	})
+}
+
+func readCachedFile(path string) ([]byte, error) {
+	if v, ok := fileCache.Load(path); ok {
+		return v.([]byte), nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	fileCache.Store(path, content)
+	return content, nil
+}
 
 // ResponseBuilder builds HTTP responses
 type ResponseBuilder struct{}
@@ -36,6 +61,7 @@ type RandomResponseConfig struct {
 // ResponseBuildConfig contains all config needed to build a response
 type ResponseBuildConfig struct {
 	ResponseFile    string
+	InlineBody      string // used when response_file is not set
 	StatusCode      int
 	DelayMs         int
 	Headers         map[string]string
@@ -59,13 +85,15 @@ func (rb *ResponseBuilder) Build(cfg ResponseBuildConfig, values map[string]stri
 		cfg.DelayMs = rr.DelayMs
 	}
 
-	// Read response file
+	// Populate body: prefer response_file, fall back to inline_body
 	if cfg.ResponseFile != "" {
-		content, err := os.ReadFile(cfg.ResponseFile)
+		content, err := readCachedFile(cfg.ResponseFile)
 		if err != nil {
 			return nil, err
 		}
 		result.Body = content
+	} else if cfg.InlineBody != "" {
+		result.Body = []byte(cfg.InlineBody)
 	}
 
 	// Apply template substitution
