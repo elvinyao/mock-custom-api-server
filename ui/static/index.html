@@ -72,28 +72,8 @@
                 <td class="px-4 py-2 text-gray-500" x-text="ep.endpoint.description || '—'"></td>
                 <td class="px-4 py-2 text-gray-500" x-text="(ep.endpoint.rules || []).length"></td>
                 <td class="px-4 py-2">
-                  <button @click="expandedEndpoint = (expandedEndpoint === idx ? null : idx)"
-                    class="text-xs text-indigo-600 hover:underline"
-                    x-text="expandedEndpoint === idx ? 'Collapse' : 'Detail'"></button>
-                </td>
-              </tr>
-              <!-- Expandable detail row -->
-              <tr x-show="expandedEndpoint === idx" class="bg-indigo-50">
-                <td colspan="6" class="px-4 py-3">
-                  <div class="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <p class="font-medium text-gray-600 mb-1">Selectors</p>
-                      <pre class="bg-white p-2 rounded border text-gray-700 max-h-32 overflow-auto" x-text="JSON.stringify(ep.endpoint.selectors || [], null, 2)"></pre>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-600 mb-1">Rules</p>
-                      <pre class="bg-white p-2 rounded border text-gray-700 max-h-32 overflow-auto" x-text="JSON.stringify(ep.endpoint.rules || [], null, 2)"></pre>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-600 mb-1">Default Response</p>
-                      <pre class="bg-white p-2 rounded border text-gray-700 max-h-32 overflow-auto" x-text="JSON.stringify(ep.endpoint.default || {}, null, 2)"></pre>
-                    </div>
-                  </div>
+                  <button @click="selectedEndpoint = ep; showEndpointModal = true"
+                    class="text-xs text-indigo-600 hover:underline">Detail</button>
                 </td>
               </tr>
             </template>
@@ -264,6 +244,69 @@
 
   </main>
 
+  <!-- ===== ENDPOINT DETAIL MODAL ===== -->
+  <div
+    x-show="showEndpointModal"
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    @click.self="showEndpointModal = false; selectedEndpoint = null"
+    @keydown.escape.window="showEndpointModal = false; selectedEndpoint = null">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center px-5 py-3 border-b">
+        <div>
+          <h3 class="font-semibold text-gray-700">Endpoint Detail</h3>
+          <p class="font-mono text-xs text-gray-400 mt-0.5" x-text="selectedEndpoint && (selectedEndpoint.endpoint.method + ' ' + selectedEndpoint.endpoint.path)"></p>
+        </div>
+        <button @click="showEndpointModal = false; selectedEndpoint = null" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+      </div>
+      <div class="overflow-auto p-5 flex flex-col gap-4 flex-1">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-xs font-medium text-gray-500 mb-1">Description</p>
+            <p class="text-sm text-gray-700" x-text="selectedEndpoint && (selectedEndpoint.endpoint.description || '—')"></p>
+          </div>
+          <div>
+            <p class="text-xs font-medium text-gray-500 mb-1">Mode</p>
+            <p class="text-sm text-gray-700" x-text="selectedEndpoint && (selectedEndpoint.endpoint.mode || 'mock')"></p>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <p class="text-xs font-medium text-gray-500">Selectors</p>
+            <button @click="copyText(JSON.stringify(selectedEndpoint && selectedEndpoint.endpoint.selectors, null, 2))" class="text-xs text-gray-400 hover:text-indigo-600">Copy</button>
+          </div>
+          <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-40 overflow-auto" x-text="JSON.stringify(selectedEndpoint && (selectedEndpoint.endpoint.selectors || []), null, 2)"></pre>
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <p class="text-xs font-medium text-gray-500">Rules</p>
+            <button @click="copyText(JSON.stringify(selectedEndpoint && selectedEndpoint.endpoint.rules, null, 2))" class="text-xs text-gray-400 hover:text-indigo-600">Copy</button>
+          </div>
+          <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-56 overflow-auto" x-text="JSON.stringify(selectedEndpoint && (selectedEndpoint.endpoint.rules || []), null, 2)"></pre>
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <p class="text-xs font-medium text-gray-500">Default Response</p>
+            <button @click="copyText(JSON.stringify(selectedEndpoint && selectedEndpoint.endpoint.default, null, 2))" class="text-xs text-gray-400 hover:text-indigo-600">Copy</button>
+          </div>
+          <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-40 overflow-auto" x-text="JSON.stringify(selectedEndpoint && (selectedEndpoint.endpoint.default || {}), null, 2)"></pre>
+        </div>
+        <div x-show="selectedEndpoint && selectedEndpoint.endpoint.mode === 'proxy'">
+          <div class="flex justify-between items-center mb-1">
+            <p class="text-xs font-medium text-gray-500">Proxy Config</p>
+            <button @click="copyText(JSON.stringify(selectedEndpoint && selectedEndpoint.endpoint.proxy, null, 2))" class="text-xs text-gray-400 hover:text-indigo-600">Copy</button>
+          </div>
+          <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-40 overflow-auto" x-text="JSON.stringify(selectedEndpoint && (selectedEndpoint.endpoint.proxy || {}), null, 2)"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== REQUEST INSPECT MODAL ===== -->
   <div
     x-show="showModal"
@@ -330,7 +373,8 @@
         tabs: ['endpoints', 'requests', 'metrics', 'config'],
         activeTab: 'endpoints',
         endpoints: [],
-        expandedEndpoint: null,
+        selectedEndpoint: null,
+        showEndpointModal: false,
         requests: [],
         requestsTotal: 0,
         requestsOffset: 0,
