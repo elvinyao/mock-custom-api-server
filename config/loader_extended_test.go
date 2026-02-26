@@ -28,29 +28,29 @@ func TestLoadConfig_InvalidYAML(t *testing.T) {
 func TestLoadConfig_DefaultPort(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	os.WriteFile(f, []byte("server:\n  port: 0\n"), 0644)
+	os.WriteFile(f, []byte("port: 0\n"), 0644)
 	cfg, err := LoadConfig(f)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Server.Port != 8080 {
-		t.Errorf("default port = %d, want 8080", cfg.Server.Port)
+	if cfg.Port != 8080 {
+		t.Errorf("default port = %d, want 8080", cfg.Port)
 	}
 }
 
 func TestLoadConfig_DefaultLoggingLevel(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	os.WriteFile(f, []byte("server: {}\n"), 0644)
+	os.WriteFile(f, []byte("{}\n"), 0644)
 	cfg, err := LoadConfig(f)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Server.Logging.Level != "info" {
-		t.Errorf("default logging level = %q, want info", cfg.Server.Logging.Level)
+	if cfg.Logging.Level != "info" {
+		t.Errorf("default logging level = %q, want info", cfg.Logging.Level)
 	}
-	if cfg.Server.Logging.LogFormat != "json" {
-		t.Errorf("default log format = %q, want json", cfg.Server.Logging.LogFormat)
+	if cfg.Logging.LogFormat != "json" {
+		t.Errorf("default log format = %q, want json", cfg.Logging.LogFormat)
 	}
 }
 
@@ -83,8 +83,7 @@ func TestLoadConfig_HealthCheckDisabled_NoDefaultPath(t *testing.T) {
 func TestLoadConfig_InlineEndpoints_Sequence(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	yaml := `server:
-  port: 9090
+	yaml := `port: 9090
 endpoints:
   - path: "/api/a"
     method: "GET"
@@ -104,7 +103,7 @@ endpoints:
 func TestLoadConfig_EmptyEndpointsSection(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	os.WriteFile(f, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(f, []byte("port: 8080\n"), 0644)
 	cfg, err := LoadConfig(f)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -122,11 +121,9 @@ func TestLoadConfig_MappingEndpoints_ConfigPaths(t *testing.T) {
 	epFile := filepath.Join(epDir, "ep.yaml")
 	os.WriteFile(epFile, []byte("- path: /from/file\n  method: GET\n"), 0644)
 
-	mainCfg := `server:
-  port: 8080
+	mainCfg := `port: 8080
 endpoints:
-  config_paths:
-    - "./eps/ep.yaml"
+  - "./eps/ep.yaml"
 `
 	mainF := filepath.Join(dir, "config.yaml")
 	os.WriteFile(mainF, []byte(mainCfg), 0644)
@@ -557,11 +554,9 @@ func TestValidateConfig_MissingRandomResponseFile(t *testing.T) {
 
 func TestValidateConfig_MissingCustomErrorResponseFile(t *testing.T) {
 	cfg := &Config{
-		Server: ServerConfig{
-			ErrorHandling: ErrorHandling{
-				CustomErrorResponses: map[int]string{
-					404: "/nonexistent/404.json",
-				},
+		ErrorHandling: ErrorHandling{
+			CustomErrorResponses: map[int]string{
+				404: "/nonexistent/404.json",
 			},
 		},
 	}
@@ -663,8 +658,7 @@ func TestAllChildrenKind_AllMatch(t *testing.T) {
 
 	// Direct approach: test allChildrenKind indirectly via parseEndpoints
 	// (string-only sequence → allChildrenKind true for ScalarNode)
-	cfgContent := `server: {}
-endpoints:
+	cfgContent := `endpoints:
   - /some/path.yaml
 `
 	cf := filepath.Join(dir, "cfg.yaml")
@@ -680,8 +674,7 @@ func TestParseEndpoints_InvalidSequence_MixedTypes(t *testing.T) {
 	// Cannot easily write a YAML with mixed scalar/mapping in sequence via file
 	// But test the "invalid mixed" path: use a config with one string and one mapping
 	dir := t.TempDir()
-	cfgContent := `server: {}
-endpoints:
+	cfgContent := `endpoints:
   - "a string path"
   - path: /inline
     method: GET

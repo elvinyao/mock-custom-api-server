@@ -34,7 +34,7 @@ func TestNewConfigManager_InitialConfigNil(t *testing.T) {
 func TestSetConfig_GetConfig_RoundTrip(t *testing.T) {
 	cm := NewConfigManager("")
 	cfg := &Config{
-		Server: ServerConfig{Port: 9090},
+		Port: 9090,
 	}
 	cm.SetConfig(cfg)
 
@@ -42,8 +42,8 @@ func TestSetConfig_GetConfig_RoundTrip(t *testing.T) {
 	if got == nil {
 		t.Fatal("GetConfig returned nil after SetConfig")
 	}
-	if got.Server.Port != 9090 {
-		t.Errorf("Port = %d, want 9090", got.Server.Port)
+	if got.Port != 9090 {
+		t.Errorf("Port = %d, want 9090", got.Port)
 	}
 }
 
@@ -205,7 +205,7 @@ func TestConfigManager_Concurrent(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			cm.SetConfig(&Config{Server: ServerConfig{Port: 8080}})
+			cm.SetConfig(&Config{Port: 8080})
 		}()
 		go func() {
 			defer wg.Done()

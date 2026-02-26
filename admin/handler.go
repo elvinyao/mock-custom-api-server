@@ -9,7 +9,6 @@ import (
 	"mock-api-server/config"
 	"mock-api-server/metrics"
 	"mock-api-server/recorder"
-	"mock-api-server/state"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,7 +18,6 @@ type Handler struct {
 	configManager *config.ConfigManager
 	recorder      *recorder.Recorder
 	metrics       *metrics.Store
-	stateStore    *state.ScenarioStore
 	startTime     time.Time
 	onReload      func() // optional callback invoked after a manual config reload
 }
@@ -29,13 +27,11 @@ func New(
 	cfgManager *config.ConfigManager,
 	rec *recorder.Recorder,
 	metricsStore *metrics.Store,
-	stateStore *state.ScenarioStore,
 ) *Handler {
 	return &Handler{
 		configManager: cfgManager,
 		recorder:      rec,
 		metrics:       metricsStore,
-		stateStore:    stateStore,
 		startTime:     time.Now(),
 	}
 }
@@ -119,10 +115,6 @@ func (h *Handler) RegisterRoutes(r *gin.Engine, prefix string, auth config.Admin
 	group.GET("/requests", h.listRequests)
 	group.DELETE("/requests", h.clearRequests)
 	group.GET("/requests/:id", h.getRequest)
-
-	// Scenarios
-	group.GET("/scenarios", h.listScenarios)
-	group.POST("/scenarios/:name/reset", h.resetScenario)
 
 	// Metrics
 	group.GET("/metrics", h.getMetrics)

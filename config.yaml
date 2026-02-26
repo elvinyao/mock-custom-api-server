@@ -1,53 +1,50 @@
-server:
-  port: 8080
-  hot_reload: true
-  reload_interval_sec: 5
+port: 8080
+hot_reload: true
+reload_interval_sec: 5
 
-  logging:
-    level: "debug"
-    access_log: true
-    log_format: "text"
+logging:
+  level: "debug"
+  access_log: true
+  log_format: "text"
 
-  error_handling:
-    show_details: true
-    custom_error_responses:
-      404: "./mocks/errors/not_found.json"
-      500: "./mocks/errors/internal_error.json"
+error_handling:
+  show_details: true
+  custom_error_responses:
+    404: "./mocks/errors/not_found.json"
+    500: "./mocks/errors/internal_error.json"
 
-  cors:
-    enabled: true
-    allowed_origins: ["*"]
-    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
-    allowed_headers: ["Content-Type", "Authorization", "X-Request-ID", "X-Session-ID"]
-    allow_credentials: false
-    max_age_seconds: 86400
+cors:
+  enabled: true
+  allowed_origins: ["*"]
+  allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+  allowed_headers: ["Content-Type", "Authorization", "X-Request-ID", "X-Session-ID"]
+  allow_credentials: false
+  max_age_seconds: 86400
 
-  admin_api:
-    enabled: true
-    prefix: "/mock-admin"
-    auth:
-      enabled: false
-      username: "admin"
-      password: "secret"
+admin_api:
+  enabled: true
+  prefix: "/mock-admin"
+  auth:
+    enabled: false
+    username: "admin"
+    password: "secret"
 
-  recording:
-    enabled: true
-    max_entries: 1000
-    record_body: true
-    max_body_bytes: 65536
-    exclude_paths:
-      - "/health"
-      - "/mock-admin/"
+recording:
+  enabled: true
+  max_entries: 1000
+  record_body: true
+  max_body_bytes: 65536
+  exclude_paths:
+    - "/health"
+    - "/mock-admin/"
 
 health_check:
   enabled: true
   path: "/health"
 
 endpoints:
-  config_paths:
-    - "./config/endpoints/holiday.yaml"
-    - "./config/endpoints/business_apis.yaml"
-    - "./config/endpoints/apex_tasks.yaml"
-    - "./config/endpoints/checkout.yaml"
-    - "./config/endpoints/proxy_example.yaml"
-    - "./config/endpoints/confluence_jira.yaml"
+  - "./config/endpoints/holiday.yaml"
+  - "./config/endpoints/business_apis.yaml"
+  - "./config/endpoints/apex_tasks.yaml"
+  - "./config/endpoints/proxy_example.yaml"
+  - "./config/endpoints/confluence_jira.yaml"

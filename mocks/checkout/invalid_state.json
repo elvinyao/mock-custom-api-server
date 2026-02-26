@@ -1,5 +1,0 @@
-{
-  "error": "INVALID_STATE",
-  "message": "This operation is not allowed in the current checkout state",
-  "hint": "Check current state: GET /api/v1/checkout/status  |  Reset: POST /mock-admin/scenarios/checkout_flow/reset"
-}

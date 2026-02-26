@@ -1,8 +1,0 @@
-{
-  "session_id": "{{.session_id}}",
-  "status": "payment_processing",
-  "payment_id": "PAY-{{.request_id}}",
-  "message": "Payment is being processed",
-  "updated_at": "{{.timestamp}}",
-  "next_action": "POST /api/v1/checkout/confirm"
-}

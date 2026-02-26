@@ -93,10 +93,6 @@
                       <p class="font-medium text-gray-600 mb-1">Default Response</p>
                       <pre class="bg-white p-2 rounded border text-gray-700 max-h-32 overflow-auto" x-text="JSON.stringify(ep.endpoint.default || {}, null, 2)"></pre>
                     </div>
-                    <div x-show="ep.endpoint.scenario">
-                      <p class="font-medium text-gray-600 mb-1">Scenario</p>
-                      <pre class="bg-white p-2 rounded border text-gray-700" x-text="ep.endpoint.scenario + (ep.endpoint.scenario_key ? ' (key: ' + ep.endpoint.scenario_key + ')' : '')"></pre>
-                    </div>
                   </div>
                 </td>
               </tr>
@@ -198,46 +194,6 @@
           class="text-sm text-indigo-600 border border-indigo-200 rounded px-4 py-1.5 hover:bg-indigo-50">
           Load more (showing <span x-text="requests.length"></span> of <span x-text="requestsTotal"></span>)
         </button>
-      </div>
-    </div>
-
-    <!-- ===== SCENARIOS TAB ===== -->
-    <div x-show="activeTab === 'scenarios'">
-      <div class="flex justify-between mb-3">
-        <h2 class="text-lg font-semibold text-gray-800">Active Scenarios</h2>
-        <button @click="fetchScenarios()" class="text-sm text-indigo-600 hover:underline">Refresh</button>
-      </div>
-      <div class="bg-white rounded shadow overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 text-sm">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-2 text-left text-gray-500 font-medium">Scenario</th>
-              <th class="px-4 py-2 text-left text-gray-500 font-medium">Partition Key</th>
-              <th class="px-4 py-2 text-left text-gray-500 font-medium">Current Step</th>
-              <th class="px-4 py-2 text-left text-gray-500 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <template x-for="sc in scenarios" :key="sc.scenario + sc.partition_key">
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-2 font-mono text-gray-800" x-text="sc.scenario"></td>
-                <td class="px-4 py-2 text-gray-500" x-text="sc.partition_key || '(global)'"></td>
-                <td class="px-4 py-2">
-                  <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs font-medium" x-text="sc.current_step"></span>
-                </td>
-                <td class="px-4 py-2 flex gap-3">
-                  <button @click="resetScenarioPartition(sc.scenario, sc.partition_key)"
-                    class="text-xs text-orange-600 hover:underline">Reset this</button>
-                  <button @click="resetScenario(sc.scenario)"
-                    class="text-xs text-red-600 hover:underline">Reset all</button>
-                </td>
-              </tr>
-            </template>
-            <tr x-show="scenarios.length === 0">
-              <td colspan="4" class="px-4 py-6 text-center text-gray-400">No active scenarios</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
 
@@ -371,7 +327,7 @@
     function dashboard() {
       const base = getAdminBase();
       return {
-        tabs: ['endpoints', 'requests', 'scenarios', 'metrics', 'config'],
+        tabs: ['endpoints', 'requests', 'metrics', 'config'],
         activeTab: 'endpoints',
         endpoints: [],
         expandedEndpoint: null,
@@ -382,7 +338,6 @@
         reqFilter: { method: '', status: '', path: '' },
         selectedRequest: null,
         showModal: false,
-        scenarios: [],
         metricsData: [],
         uptimeStr: '—',
         configJson: '',
@@ -409,7 +364,6 @@
           setInterval(() => this.fetchHealth(), 10000);
           setInterval(() => {
             if (this.activeTab === 'requests') this.fetchRequests();
-            else if (this.activeTab === 'scenarios') this.fetchScenarios();
             else if (this.activeTab === 'metrics') this.fetchMetrics();
           }, 5000);
         },
@@ -418,7 +372,6 @@
           this.activeTab = tab;
           if (tab === 'requests') this.fetchRequests();
           else if (tab === 'endpoints') this.fetchEndpoints();
-          else if (tab === 'scenarios') this.fetchScenarios();
           else if (tab === 'metrics') this.fetchMetrics();
           else if (tab === 'config') this.fetchConfig();
         },
@@ -427,7 +380,6 @@
           await Promise.all([
             this.fetchEndpoints(),
             this.fetchRequests(),
-            this.fetchScenarios(),
             this.fetchMetrics(),
             this.fetchConfig(),
             this.fetchHealth(),
@@ -493,29 +445,6 @@
             this.selectedRequest = req;
           }
           this.showModal = true;
-        },
-
-        async fetchScenarios() {
-          try {
-            const r = await fetch(`${base}/scenarios`);
-            const d = await r.json();
-            this.scenarios = d.scenarios || [];
-          } catch {}
-        },
-
-        async resetScenario(name) {
-          try {
-            await fetch(`${base}/scenarios/${encodeURIComponent(name)}/reset`, { method: 'POST' });
-            await this.fetchScenarios();
-          } catch {}
-        },
-
-        async resetScenarioPartition(name, partitionKey) {
-          try {
-            const qs = partitionKey ? `?partition_key=${encodeURIComponent(partitionKey)}` : '';
-            await fetch(`${base}/scenarios/${encodeURIComponent(name)}/reset${qs}`, { method: 'POST' });
-            await this.fetchScenarios();
-          } catch {}
         },
 
         async fetchMetrics() {

@@ -13,7 +13,6 @@ import (
 	"mock-api-server/config"
 	"mock-api-server/metrics"
 	"mock-api-server/recorder"
-	"mock-api-server/state"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,13 +23,12 @@ func init() {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func newTestHandler() (*Handler, *config.ConfigManager, *recorder.Recorder, *metrics.Store, *state.ScenarioStore) {
+func newTestHandler() (*Handler, *config.ConfigManager, *recorder.Recorder, *metrics.Store) {
 	cm := config.NewConfigManager("")
 	rec := recorder.New(100)
 	ms := metrics.New()
-	ss := state.New()
-	h := New(cm, rec, ms, ss)
-	return h, cm, rec, ms, ss
+	h := New(cm, rec, ms)
+	return h, cm, rec, ms
 }
 
 func setupRouter(h *Handler) *gin.Engine {
@@ -59,7 +57,7 @@ func doRequest(r *gin.Engine, method, path string, body interface{}) *httptest.R
 // ── getHealth ─────────────────────────────────────────────────────────────────
 
 func TestGetHealth_NoConfig(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/health", nil)
 	if w.Code != http.StatusOK {
@@ -73,7 +71,7 @@ func TestGetHealth_NoConfig(t *testing.T) {
 }
 
 func TestGetHealth_WithConfig(t *testing.T) {
-	h, cm, _, _, _ := newTestHandler()
+	h, cm, _, _ := newTestHandler()
 	cm.SetConfig(&config.Config{
 		Endpoints: []config.Endpoint{{Path: "/a"}, {Path: "/b"}},
 	})
@@ -94,7 +92,7 @@ func TestGetHealth_WithConfig(t *testing.T) {
 // ── getConfig ─────────────────────────────────────────────────────────────────
 
 func TestGetConfig_NilConfig_503(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/config", nil)
 	if w.Code != http.StatusServiceUnavailable {
@@ -103,8 +101,8 @@ func TestGetConfig_NilConfig_503(t *testing.T) {
 }
 
 func TestGetConfig_WithConfig_200(t *testing.T) {
-	h, cm, _, _, _ := newTestHandler()
-	cm.SetConfig(&config.Config{Server: config.ServerConfig{Port: 9999}})
+	h, cm, _, _ := newTestHandler()
+	cm.SetConfig(&config.Config{Port: 9999})
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/config", nil)
 	if w.Code != http.StatusOK {
@@ -112,16 +110,15 @@ func TestGetConfig_WithConfig_200(t *testing.T) {
 	}
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	srv := resp["server"].(map[string]interface{})
-	if srv["port"].(float64) != 9999 {
-		t.Errorf("port = %v, want 9999", srv["port"])
+	if resp["port"].(float64) != 9999 {
+		t.Errorf("port = %v, want 9999", resp["port"])
 	}
 }
 
 // ── postConfigReload ──────────────────────────────────────────────────────────
 
 func TestPostConfigReload_InvalidPath_500(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "POST", "/admin/config/reload", nil)
 	if w.Code != http.StatusInternalServerError {
@@ -132,8 +129,7 @@ func TestPostConfigReload_InvalidPath_500(t *testing.T) {
 func TestPostConfigReload_ValidPath_200(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	cfgContent := `server:
-  port: 8080
+	cfgContent := `port: 8080
 health_check:
   enabled: true
   path: /health
@@ -143,7 +139,7 @@ health_check:
 	}
 
 	cm := config.NewConfigManager(cfgFile)
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
 
@@ -156,7 +152,7 @@ health_check:
 // ── listEndpoints ─────────────────────────────────────────────────────────────
 
 func TestListEndpoints_Empty(t *testing.T) {
-	h, cm, _, _, _ := newTestHandler()
+	h, cm, _, _ := newTestHandler()
 	cm.SetConfig(&config.Config{})
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/endpoints", nil)
@@ -171,7 +167,7 @@ func TestListEndpoints_Empty(t *testing.T) {
 }
 
 func TestListEndpoints_WithFileAndRuntime(t *testing.T) {
-	h, cm, _, _, _ := newTestHandler()
+	h, cm, _, _ := newTestHandler()
 	cm.SetConfig(&config.Config{
 		Endpoints: []config.Endpoint{{Path: "/file/ep"}},
 	})
@@ -188,7 +184,7 @@ func TestListEndpoints_WithFileAndRuntime(t *testing.T) {
 // ── addEndpoint ───────────────────────────────────────────────────────────────
 
 func TestAddEndpoint_ValidPayload_201(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	ep := map[string]interface{}{
 		"path":   "/new/ep",
@@ -201,7 +197,7 @@ func TestAddEndpoint_ValidPayload_201(t *testing.T) {
 }
 
 func TestAddEndpoint_MissingPath_400(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	ep := map[string]interface{}{
 		"method": "GET",
@@ -213,7 +209,7 @@ func TestAddEndpoint_MissingPath_400(t *testing.T) {
 }
 
 func TestAddEndpoint_MissingMethod_400(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	ep := map[string]interface{}{
 		"path": "/ep",
@@ -227,7 +223,7 @@ func TestAddEndpoint_MissingMethod_400(t *testing.T) {
 // ── updateEndpoint ────────────────────────────────────────────────────────────
 
 func TestUpdateEndpoint_ValidIndex_200(t *testing.T) {
-	h, cm, _, _, _ := newTestHandler()
+	h, cm, _, _ := newTestHandler()
 	cm.AddRuntimeEndpoint(config.Endpoint{Path: "/old"})
 	r := setupRouter(h)
 	ep := map[string]interface{}{
@@ -241,7 +237,7 @@ func TestUpdateEndpoint_ValidIndex_200(t *testing.T) {
 }
 
 func TestUpdateEndpoint_InvalidID_400(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "PUT", "/admin/endpoints/notanumber", map[string]interface{}{})
 	if w.Code != http.StatusBadRequest {
@@ -250,7 +246,7 @@ func TestUpdateEndpoint_InvalidID_400(t *testing.T) {
 }
 
 func TestUpdateEndpoint_OutOfRange_404(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	ep := map[string]interface{}{"path": "/x", "method": "GET"}
 	w := doRequest(r, "PUT", "/admin/endpoints/99", ep)
@@ -262,7 +258,7 @@ func TestUpdateEndpoint_OutOfRange_404(t *testing.T) {
 // ── deleteEndpoint ────────────────────────────────────────────────────────────
 
 func TestDeleteEndpoint_ValidIndex_200(t *testing.T) {
-	h, cm, _, _, _ := newTestHandler()
+	h, cm, _, _ := newTestHandler()
 	cm.AddRuntimeEndpoint(config.Endpoint{Path: "/to-delete"})
 	r := setupRouter(h)
 	w := doRequest(r, "DELETE", "/admin/endpoints/0", nil)
@@ -272,7 +268,7 @@ func TestDeleteEndpoint_ValidIndex_200(t *testing.T) {
 }
 
 func TestDeleteEndpoint_InvalidID_400(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "DELETE", "/admin/endpoints/abc", nil)
 	if w.Code != http.StatusBadRequest {
@@ -281,7 +277,7 @@ func TestDeleteEndpoint_InvalidID_400(t *testing.T) {
 }
 
 func TestDeleteEndpoint_OutOfRange_404(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "DELETE", "/admin/endpoints/0", nil)
 	if w.Code != http.StatusNotFound {
@@ -293,7 +289,7 @@ func TestDeleteEndpoint_OutOfRange_404(t *testing.T) {
 
 func TestListRequests_NilRecorder(t *testing.T) {
 	cm := config.NewConfigManager("")
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
 
@@ -309,7 +305,7 @@ func TestListRequests_NilRecorder(t *testing.T) {
 }
 
 func TestListRequests_WithRecords(t *testing.T) {
-	h, _, rec, _, _ := newTestHandler()
+	h, _, rec, _ := newTestHandler()
 	for i := 0; i < 5; i++ {
 		rec.Record(&recorder.RecordedRequest{
 			Method:         "GET",
@@ -331,7 +327,7 @@ func TestListRequests_WithRecords(t *testing.T) {
 }
 
 func TestListRequests_LimitAndOffset(t *testing.T) {
-	h, _, rec, _, _ := newTestHandler()
+	h, _, rec, _ := newTestHandler()
 	for i := 0; i < 10; i++ {
 		rec.Record(&recorder.RecordedRequest{
 			Method: "GET", Path: "/x",
@@ -355,7 +351,7 @@ func TestListRequests_LimitAndOffset(t *testing.T) {
 
 func TestGetRequest_NilRecorder_404(t *testing.T) {
 	cm := config.NewConfigManager("")
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
 	w := doRequest(r, "GET", "/admin/requests/req_1", nil)
@@ -365,7 +361,7 @@ func TestGetRequest_NilRecorder_404(t *testing.T) {
 }
 
 func TestGetRequest_NotFound_404(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/requests/req_99999", nil)
 	if w.Code != http.StatusNotFound {
@@ -374,7 +370,7 @@ func TestGetRequest_NotFound_404(t *testing.T) {
 }
 
 func TestGetRequest_Found_200(t *testing.T) {
-	h, _, rec, _, _ := newTestHandler()
+	h, _, rec, _ := newTestHandler()
 	entry := &recorder.RecordedRequest{
 		Method:         "GET",
 		Path:           "/found",
@@ -392,7 +388,7 @@ func TestGetRequest_Found_200(t *testing.T) {
 // ── clearRequests ─────────────────────────────────────────────────────────────
 
 func TestClearRequests_ClearsAll(t *testing.T) {
-	h, _, rec, _, _ := newTestHandler()
+	h, _, rec, _ := newTestHandler()
 	rec.Record(&recorder.RecordedRequest{
 		Method: "GET", Path: "/x",
 		Timestamp: time.Now(), ResponseStatus: 200,
@@ -409,65 +405,10 @@ func TestClearRequests_ClearsAll(t *testing.T) {
 
 func TestClearRequests_NilRecorder_200(t *testing.T) {
 	cm := config.NewConfigManager("")
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
 	w := doRequest(r, "DELETE", "/admin/requests", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", w.Code)
-	}
-}
-
-// ── listScenarios ─────────────────────────────────────────────────────────────
-
-func TestListScenarios_NilStore(t *testing.T) {
-	cm := config.NewConfigManager("")
-	h := New(cm, nil, nil, nil)
-	r := gin.New()
-	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
-	w := doRequest(r, "GET", "/admin/scenarios", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", w.Code)
-	}
-}
-
-func TestListScenarios_WithEntries(t *testing.T) {
-	h, _, _, _, ss := newTestHandler()
-	ss.SetStep("checkout", "user1", "initiated")
-	ss.SetStep("checkout", "user2", "confirmed")
-	r := setupRouter(h)
-	w := doRequest(r, "GET", "/admin/scenarios", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", w.Code)
-	}
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["total"].(float64) != 2 {
-		t.Errorf("total = %v, want 2", resp["total"])
-	}
-}
-
-// ── resetScenario ─────────────────────────────────────────────────────────────
-
-func TestResetScenario_ResetsState(t *testing.T) {
-	h, _, _, _, ss := newTestHandler()
-	ss.SetStep("myflow", "p1", "active")
-	r := setupRouter(h)
-	w := doRequest(r, "POST", "/admin/scenarios/myflow/reset", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", w.Code)
-	}
-	if ss.GetStep("myflow", "p1") != "idle" {
-		t.Error("expected idle after reset")
-	}
-}
-
-func TestResetScenario_NilStore_200(t *testing.T) {
-	cm := config.NewConfigManager("")
-	h := New(cm, nil, nil, nil)
-	r := gin.New()
-	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
-	w := doRequest(r, "POST", "/admin/scenarios/myflow/reset", nil)
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", w.Code)
 	}
@@ -477,7 +418,7 @@ func TestResetScenario_NilStore_200(t *testing.T) {
 
 func TestGetMetrics_NilStore(t *testing.T) {
 	cm := config.NewConfigManager("")
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	h.RegisterRoutes(r, "/admin", config.AdminAuth{})
 	w := doRequest(r, "GET", "/admin/metrics", nil)
@@ -492,7 +433,7 @@ func TestGetMetrics_NilStore(t *testing.T) {
 }
 
 func TestGetMetrics_WithData(t *testing.T) {
-	h, _, _, ms, _ := newTestHandler()
+	h, _, _, ms := newTestHandler()
 	ms.Record("GET", "/test", 200, 50)
 	ms.Record("GET", "/test", 500, 100)
 	r := setupRouter(h)
@@ -513,7 +454,7 @@ func TestGetMetrics_WithData(t *testing.T) {
 func TestBasicAuth_Required_Unauthorized(t *testing.T) {
 	cm := config.NewConfigManager("")
 	cm.SetConfig(&config.Config{})
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	auth := config.AdminAuth{
 		Enabled:  true,
@@ -533,7 +474,7 @@ func TestBasicAuth_Required_Unauthorized(t *testing.T) {
 func TestBasicAuth_ValidCredentials_200(t *testing.T) {
 	cm := config.NewConfigManager("")
 	cm.SetConfig(&config.Config{})
-	h := New(cm, nil, nil, nil)
+	h := New(cm, nil, nil)
 	r := gin.New()
 	auth := config.AdminAuth{
 		Enabled:  true,

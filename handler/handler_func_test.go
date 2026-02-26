@@ -133,22 +133,6 @@ func TestConvertRules_WithConditionGroups(t *testing.T) {
 	}
 }
 
-func TestConvertRules_ScenarioFields(t *testing.T) {
-	cfgRules := []config.Rule{
-		{
-			ScenarioStep: "idle",
-			NextStep:     "active",
-		},
-	}
-	rules := convertRules(cfgRules)
-	if rules[0].ScenarioStep != "idle" {
-		t.Errorf("ScenarioStep = %q, want idle", rules[0].ScenarioStep)
-	}
-	if rules[0].NextStep != "active" {
-		t.Errorf("NextStep = %q, want active", rules[0].NextStep)
-	}
-}
-
 func TestConvertRules_AllFields(t *testing.T) {
 	cfgRules := []config.Rule{
 		{

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"mock-api-server/config"
-	"mock-api-server/state"
 
 	"github.com/gin-gonic/gin"
 )
@@ -142,10 +141,8 @@ func TestHandleNotFound_CustomFile(t *testing.T) {
 	defer os.Remove(tmp)
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			ErrorHandling: config.ErrorHandling{
-				CustomErrorResponses: map[int]string{404: tmp},
-			},
+		ErrorHandling: config.ErrorHandling{
+			CustomErrorResponses: map[int]string{404: tmp},
 		},
 	}
 	h := NewMockHandler(buildTestConfigManager(cfg))
@@ -186,9 +183,7 @@ func TestHandleError_DefaultJSON(t *testing.T) {
 
 func TestHandleError_ShowDetails(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			ErrorHandling: config.ErrorHandling{ShowDetails: true},
-		},
+		ErrorHandling: config.ErrorHandling{ShowDetails: true},
 	}
 	h := NewMockHandler(buildTestConfigManager(cfg))
 	r := gin.New()
@@ -210,10 +205,8 @@ func TestHandleError_CustomFile(t *testing.T) {
 	defer os.Remove(tmp)
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			ErrorHandling: config.ErrorHandling{
-				CustomErrorResponses: map[int]string{500: tmp},
-			},
+		ErrorHandling: config.ErrorHandling{
+			CustomErrorResponses: map[int]string{500: tmp},
 		},
 	}
 	h := NewMockHandler(buildTestConfigManager(cfg))
@@ -335,68 +328,6 @@ func TestHandleRequest_WithSelector_MatchesRule(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 	if !bytes.Contains(w2.Body.Bytes(), []byte("regular")) {
 		t.Errorf("expected regular response, got %s", w2.Body.String())
-	}
-}
-
-func TestHandleRequest_ScenarioStateTransition(t *testing.T) {
-	step1File := writeTempFile(t, `{"step":"initiated"}`)
-	step2File := writeTempFile(t, `{"step":"confirmed"}`)
-	invalidFile := writeTempFile(t, `{"error":"invalid state"}`)
-	defer os.Remove(step1File)
-	defer os.Remove(step2File)
-	defer os.Remove(invalidFile)
-
-	ep := config.Endpoint{
-		Path:        "/checkout",
-		Method:      "POST",
-		Scenario:    "checkout_test",
-		ScenarioKey: "sid",
-		Selectors: []config.Selector{
-			{Name: "sid", Type: "header", Key: "X-Session"},
-		},
-		Rules: []config.Rule{
-			{
-				ScenarioStep: "idle",
-				ResponseConfig: config.ResponseConfig{
-					ResponseFile: step1File,
-					StatusCode:   200,
-				},
-				NextStep: "initiated",
-			},
-			{
-				ScenarioStep: "initiated",
-				ResponseConfig: config.ResponseConfig{
-					ResponseFile: step2File,
-					StatusCode:   200,
-				},
-				NextStep: "confirmed",
-			},
-		},
-		Default: config.ResponseConfig{ResponseFile: invalidFile, StatusCode: 409},
-	}
-
-	stateStore := state.New()
-	cm := buildTestConfigManager(&config.Config{Endpoints: []config.Endpoint{ep}})
-	h := NewMockHandlerWithState(cm, stateStore)
-	r := gin.New()
-	h.RegisterRoutes(r)
-
-	// First call: idle → initiated
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/checkout", nil)
-	req.Header.Set("X-Session", "session1")
-	r.ServeHTTP(w, req)
-	if !bytes.Contains(w.Body.Bytes(), []byte("initiated")) {
-		t.Errorf("first call: expected initiated response, got %s", w.Body.String())
-	}
-
-	// Second call: initiated → confirmed
-	w2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest("POST", "/checkout", nil)
-	req2.Header.Set("X-Session", "session1")
-	r.ServeHTTP(w2, req2)
-	if !bytes.Contains(w2.Body.Bytes(), []byte("confirmed")) {
-		t.Errorf("second call: expected confirmed response, got %s", w2.Body.String())
 	}
 }
 
@@ -528,15 +459,6 @@ func TestHandleRequest_DelayApplied(t *testing.T) {
 
 	if elapsed < 15*time.Millisecond {
 		t.Errorf("expected >=15ms delay, got %v", elapsed)
-	}
-}
-
-func TestGetStateStore(t *testing.T) {
-	st := state.New()
-	cm := buildTestConfigManager(nil)
-	h := NewMockHandlerWithState(cm, st)
-	if h.GetStateStore() != st {
-		t.Errorf("GetStateStore() returned wrong store")
 	}
 }
 

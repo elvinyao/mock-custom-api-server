@@ -12,7 +12,6 @@ import (
 	"mock-api-server/metrics"
 	"mock-api-server/middleware"
 	"mock-api-server/recorder"
-	"mock-api-server/state"
 	"mock-api-server/ui"
 
 	"github.com/gin-gonic/gin"
@@ -45,16 +44,16 @@ func main() {
 
 	// Create zap logger
 	zapLogger, err := middleware.NewLogger(
-		cfg.Server.Logging.Level,
-		cfg.Server.Logging.LogFormat,
-		cfg.Server.Logging.LogFile,
+		cfg.Logging.Level,
+		cfg.Logging.LogFormat,
+		cfg.Logging.LogFile,
 	)
 	if err != nil {
 		startupLogger.Printf("[WARN] Failed to create zap logger, using default: %v", err)
 	}
 
 	// Set Gin mode based on log level
-	if cfg.Server.Logging.Level == "debug" {
+	if cfg.Logging.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -62,15 +61,12 @@ func main() {
 
 	// ── New subsystems ──────────────────────────────────────────────────────
 
-	// Shared state store (scenarios)
-	stateStore := state.New()
-
 	// Metrics store
 	metricsStore := metrics.New()
 
 	// Request recorder (if enabled)
 	var rec *recorder.Recorder
-	recordingCfg := cfg.Server.Recording
+	recordingCfg := cfg.Recording
 	if recordingCfg.Enabled {
 		maxEntries := recordingCfg.MaxEntries
 		if maxEntries <= 0 {
@@ -85,15 +81,15 @@ func main() {
 	router := gin.New()
 
 	// 1. CORS (must be first)
-	if cfg.Server.CORS.Enabled {
-		router.Use(middleware.CORS(cfg.Server.CORS))
+	if cfg.CORS.Enabled {
+		router.Use(middleware.CORS(cfg.CORS))
 		startupLogger.Printf("CORS enabled")
 	}
 
 	// 2. Logging / Recovery
 	if zapLogger != nil {
-		router.Use(middleware.Logger(zapLogger, cfg.Server.Logging.AccessLog))
-		router.Use(middleware.Recovery(zapLogger, cfg.Server.ErrorHandling.ShowDetails))
+		router.Use(middleware.Logger(zapLogger, cfg.Logging.AccessLog))
+		router.Use(middleware.Recovery(zapLogger, cfg.ErrorHandling.ShowDetails))
 	} else {
 		router.Use(gin.Logger())
 		router.Use(gin.Recovery())
@@ -123,14 +119,14 @@ func main() {
 	}
 
 	// ── Admin API ───────────────────────────────────────────────────────────
-	adminCfg := cfg.Server.AdminAPI
+	adminCfg := cfg.AdminAPI
 	adminPrefix := "/mock-admin"
 	if adminCfg.Prefix != "" {
 		adminPrefix = adminCfg.Prefix
 	}
 
 	if adminCfg.Enabled {
-		adminHandler := admin.New(cfgManager, rec, metricsStore, stateStore)
+		adminHandler := admin.New(cfgManager, rec, metricsStore)
 		adminHandler.SetReloadCallback(handler.ClearFileCache)
 		adminHandler.RegisterRoutes(router, adminPrefix, adminCfg.Auth)
 		startupLogger.Printf("Admin API enabled at: %s", adminPrefix)
@@ -141,25 +137,25 @@ func main() {
 	}
 
 	// ── Mock handler ────────────────────────────────────────────────────────
-	mockHandler := handler.NewMockHandlerWithState(cfgManager, stateStore)
+	mockHandler := handler.NewMockHandler(cfgManager)
 	mockHandler.RegisterRoutes(router)
 
 	// ── Config watcher (hot reload) ─────────────────────────────────────────
-	if cfg.Server.HotReload {
+	if cfg.HotReload {
 		stdLogger := log.New(os.Stdout, "[CONFIG] ", log.LstdFlags)
 		watcher := config.NewWatcher(*configPath, cfgManager, stdLogger)
 		watcher.OnReload = handler.ClearFileCache
-		watcher.Start(cfg.Server.ReloadIntervalSec)
+		watcher.Start(cfg.ReloadIntervalSec)
 		defer watcher.Stop()
 		startupLogger.Printf("Hot reload enabled, watching: %s", *configPath)
 	}
 
 	// ── Start server ────────────────────────────────────────────────────────
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
+	addr := fmt.Sprintf(":%d", cfg.Port)
 	startupLogger.Printf("Starting Mock API Server on %s", addr)
 	startupLogger.Printf("Loaded %d endpoint(s)", len(cfg.Endpoints))
 
-	tlsCfg := cfg.Server.TLS
+	tlsCfg := cfg.TLS
 	if tlsCfg.Enabled {
 		if tlsCfg.CertFile == "" || tlsCfg.KeyFile == "" {
 			startupLogger.Fatalf("TLS enabled but cert_file or key_file is missing")
@@ -179,9 +175,9 @@ func main() {
 // Falls back to sensible defaults derived from the actual config values so that
 // a custom admin prefix or health path is correctly excluded.
 func buildExcludePaths(cfg *config.Config) []string {
-	exclude := cfg.Server.Recording.ExcludePaths
+	exclude := cfg.Recording.ExcludePaths
 	if len(exclude) == 0 {
-		adminPrefix := cfg.Server.AdminAPI.Prefix
+		adminPrefix := cfg.AdminAPI.Prefix
 		if adminPrefix == "" {
 			adminPrefix = "/mock-admin"
 		}

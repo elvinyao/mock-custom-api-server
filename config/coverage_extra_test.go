@@ -15,7 +15,7 @@ import (
 func TestLoadConfig_EmptyEndpointsSequence(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	os.WriteFile(f, []byte("server:\n  port: 8080\nendpoints: []\n"), 0644)
+	os.WriteFile(f, []byte("port: 8080\nendpoints: []\n"), 0644)
 	cfg, err := LoadConfig(f)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -29,8 +29,7 @@ func TestLoadConfig_EmptyEndpointsSequence(t *testing.T) {
 func TestLoadConfig_InlineMappingEndpoint(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	yaml := `server:
-  port: 8080
+	yaml := `port: 8080
 endpoints:
   path: "/inline-ep"
   method: "GET"
@@ -49,8 +48,7 @@ endpoints:
 func TestLoadConfig_MappingEndpoints_NoContent_Error(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	yaml := `server:
-  port: 8080
+	yaml := `port: 8080
 endpoints:
   unknown_key: "value"
 `
@@ -65,7 +63,7 @@ endpoints:
 func TestLoadConfig_ScalarEndpoints_Error(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	os.WriteFile(f, []byte("server:\n  port: 8080\nendpoints: 42\n"), 0644)
+	os.WriteFile(f, []byte("port: 8080\nendpoints: 42\n"), 0644)
 	_, err := LoadConfig(f)
 	if err == nil {
 		t.Error("expected error for scalar endpoints node")
@@ -79,8 +77,7 @@ func TestLoadConfig_ScalarEndpoints_Error(t *testing.T) {
 func TestLoadConfig_InlineMappingBadFieldType_Error(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	yaml := `server:
-  port: 8080
+	yaml := `port: 8080
 endpoints:
   - path: /test
     method: GET
@@ -97,8 +94,7 @@ endpoints:
 func TestLoadConfig_MappingBadFieldType_Error(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "config.yaml")
-	yaml := `server:
-  port: 8080
+	yaml := `port: 8080
 endpoints:
   path: /test
   selectors: "not-a-list"
@@ -149,7 +145,7 @@ func TestLoadEndpointsFromFile_MappingBadFieldType(t *testing.T) {
 func TestAddWatchPath_AlreadyWatched(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 8080\n"), 0644)
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -180,7 +176,7 @@ func TestWatchEndpointConfigFiles_WithRealWatcher(t *testing.T) {
 	os.WriteFile(epFile, []byte("- path: /x\n  method: GET\n"), 0644)
 
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 8080\n"), 0644)
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -245,7 +241,7 @@ func TestWatchEndpointConfigFiles_BadPath_LogsWarning(t *testing.T) {
 func TestWatchWithPolling_TickerBranch(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 8080\n"), 0644)
 
 	cm := NewConfigManager(cfgFile)
 	w := NewWatcher(cfgFile, cm, noopLogger)
@@ -274,7 +270,7 @@ func TestWatchWithPolling_TickerBranch(t *testing.T) {
 func TestWatchWithFsnotify_FileChangeTriggersReload(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 8080\n"), 0644)
 
 	cm := NewConfigManager(cfgFile)
 	w := NewWatcher(cfgFile, cm, noopLogger)
@@ -284,7 +280,7 @@ func TestWatchWithFsnotify_FileChangeTriggersReload(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Write to the file to trigger a fsnotify event
-	os.WriteFile(cfgFile, []byte("server:\n  port: 9999\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 9999\n"), 0644)
 
 	// Wait for debounce (500ms) + some margin
 	time.Sleep(700 * time.Millisecond)
@@ -294,8 +290,8 @@ func TestWatchWithFsnotify_FileChangeTriggersReload(t *testing.T) {
 
 	// Config should have been reloaded
 	cfg := cm.GetConfig()
-	if cfg != nil && cfg.Server.Port != 9999 {
+	if cfg != nil && cfg.Port != 9999 {
 		// Not a hard failure since timing is non-deterministic
-		t.Logf("Port = %d (may not have reloaded yet due to timing)", cfg.Server.Port)
+		t.Logf("Port = %d (may not have reloaded yet due to timing)", cfg.Port)
 	}
 }

@@ -11,9 +11,17 @@ import (
 )
 
 type rawConfig struct {
-	Server      ServerConfig `yaml:"server"`
-	HealthCheck HealthCheck  `yaml:"health_check"`
-	Endpoints   yaml.Node    `yaml:"endpoints"`
+	Port              int             `yaml:"port"`
+	HotReload         bool            `yaml:"hot_reload"`
+	ReloadIntervalSec int             `yaml:"reload_interval_sec"`
+	Logging           LoggingConfig   `yaml:"logging"`
+	ErrorHandling     ErrorHandling   `yaml:"error_handling"`
+	CORS              CORSConfig      `yaml:"cors"`
+	AdminAPI          AdminAPIConfig  `yaml:"admin_api"`
+	Recording         RecordingConfig `yaml:"recording"`
+	TLS               TLSConfig       `yaml:"tls"`
+	HealthCheck       HealthCheck     `yaml:"health_check"`
+	Endpoints         yaml.Node       `yaml:"endpoints"`
 }
 
 type endpointPathsConfig struct {
@@ -53,21 +61,29 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	cfg := Config{
-		Server:              raw.Server,
+		Port:                raw.Port,
+		HotReload:           raw.HotReload,
+		ReloadIntervalSec:   raw.ReloadIntervalSec,
+		Logging:             raw.Logging,
+		ErrorHandling:       raw.ErrorHandling,
+		CORS:                raw.CORS,
+		AdminAPI:            raw.AdminAPI,
+		Recording:           raw.Recording,
+		TLS:                 raw.TLS,
 		HealthCheck:         raw.HealthCheck,
 		Endpoints:           endpoints,
 		EndpointConfigPaths: endpointConfigPaths,
 	}
 
 	// Set defaults
-	if cfg.Server.Port == 0 {
-		cfg.Server.Port = 8080
+	if cfg.Port == 0 {
+		cfg.Port = 8080
 	}
-	if cfg.Server.Logging.Level == "" {
-		cfg.Server.Logging.Level = "info"
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "info"
 	}
-	if cfg.Server.Logging.LogFormat == "" {
-		cfg.Server.Logging.LogFormat = "json"
+	if cfg.Logging.LogFormat == "" {
+		cfg.Logging.LogFormat = "json"
 	}
 	if cfg.HealthCheck.Path == "" && cfg.HealthCheck.Enabled {
 		cfg.HealthCheck.Path = "/health"
@@ -307,7 +323,7 @@ func ValidateConfig(cfg *Config) []string {
 	}
 
 	// Check custom error response files
-	for code, file := range cfg.Server.ErrorHandling.CustomErrorResponses {
+	for code, file := range cfg.ErrorHandling.CustomErrorResponses {
 		if _, err := os.Stat(file); os.IsNotExist(err) {
 			warnings = append(warnings, fmt.Sprintf("error_handling.custom_error_responses[%d]: file not found: %s", code, file))
 		}

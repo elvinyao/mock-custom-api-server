@@ -11,7 +11,6 @@ import (
 
 	"mock-api-server/config"
 	"mock-api-server/proxy"
-	"mock-api-server/state"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +19,6 @@ import (
 type MockHandler struct {
 	configManager   *config.ConfigManager
 	responseBuilder *ResponseBuilder
-	stateStore      *state.ScenarioStore
 }
 
 // NewMockHandler creates a new MockHandler
@@ -28,22 +26,7 @@ func NewMockHandler(cfgManager *config.ConfigManager) *MockHandler {
 	return &MockHandler{
 		configManager:   cfgManager,
 		responseBuilder: NewResponseBuilder(),
-		stateStore:      state.New(),
 	}
-}
-
-// NewMockHandlerWithState creates a MockHandler with an existing state store
-func NewMockHandlerWithState(cfgManager *config.ConfigManager, stateStore *state.ScenarioStore) *MockHandler {
-	return &MockHandler{
-		configManager:   cfgManager,
-		responseBuilder: NewResponseBuilder(),
-		stateStore:      stateStore,
-	}
-}
-
-// GetStateStore returns the state store (for use by admin handlers)
-func (h *MockHandler) GetStateStore() *state.ScenarioStore {
-	return h.stateStore
 }
 
 // RegisterRoutes registers all endpoint routes from config
@@ -145,26 +128,8 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 	// Convert config rules to handler rules
 	rules := convertRules(endpoint.Rules)
 
-	// Match rules, considering scenario state if applicable
-	var matchedRule *Rule
-	if endpoint.Scenario != "" {
-		// Get current scenario step using partition key
-		partitionValue := ""
-		if endpoint.ScenarioKey != "" {
-			partitionValue = values[endpoint.ScenarioKey]
-		}
-		currentStep := h.stateStore.GetStep(endpoint.Scenario, partitionValue)
-
-		// Match rule filtered by scenario step
-		matchedRule = MatchRulesForStep(values, rules, currentStep)
-
-		// Transition to next step if rule matched
-		if matchedRule != nil && matchedRule.NextStep != "" {
-			h.stateStore.SetStep(endpoint.Scenario, partitionValue, matchedRule.NextStep)
-		}
-	} else {
-		matchedRule = MatchRules(values, rules)
-	}
+	// Match rules
+	matchedRule := MatchRules(values, rules)
 
 	// Build response config
 	var respCfg ResponseBuildConfig
@@ -288,8 +253,6 @@ func convertRules(cfgRules []config.Rule) []Rule {
 			ConditionLogic:  r.ConditionLogic,
 			Conditions:      conditions,
 			ConditionGroups: groups,
-			ScenarioStep:    r.ScenarioStep,
-			NextStep:        r.NextStep,
 			ResponseFile:    r.ResponseFile,
 			InlineBody:      r.InlineBody,
 			StatusCode:      r.StatusCode,
@@ -365,7 +328,7 @@ func matchPath(pattern, requestPath string) (map[string]string, bool) {
 func (h *MockHandler) handleNotFound(c *gin.Context, cfg *config.Config) {
 	if cfg != nil {
 		// Check for custom 404 response
-		if file, ok := cfg.Server.ErrorHandling.CustomErrorResponses[404]; ok {
+		if file, ok := cfg.ErrorHandling.CustomErrorResponses[404]; ok {
 			content, err := os.ReadFile(file)
 			if err == nil {
 				c.Data(http.StatusNotFound, "application/json", content)
@@ -387,7 +350,7 @@ func (h *MockHandler) handleNotFound(c *gin.Context, cfg *config.Config) {
 func (h *MockHandler) handleError(c *gin.Context, cfg *config.Config, err error) {
 	if cfg != nil {
 		// Check for custom 500 response
-		if file, ok := cfg.Server.ErrorHandling.CustomErrorResponses[500]; ok {
+		if file, ok := cfg.ErrorHandling.CustomErrorResponses[500]; ok {
 			content, readErr := os.ReadFile(file)
 			if readErr == nil {
 				c.Data(http.StatusInternalServerError, "application/json", content)
@@ -403,7 +366,7 @@ func (h *MockHandler) handleError(c *gin.Context, cfg *config.Config, err error)
 		},
 	}
 
-	if cfg != nil && cfg.Server.ErrorHandling.ShowDetails {
+	if cfg != nil && cfg.ErrorHandling.ShowDetails {
 		response["error"].(gin.H)["details"] = err.Error()
 	}
 
@@ -435,7 +398,7 @@ func HealthHandler(cfgManager *config.ConfigManager) gin.HandlerFunc {
 			"config": gin.H{
 				"loaded_at":       cfgManager.GetLoadedAt().Format("2006-01-02T15:04:05Z07:00"),
 				"endpoints_count": endpointsCount,
-				"hot_reload":      cfg != nil && cfg.Server.HotReload,
+				"hot_reload":      cfg != nil && cfg.HotReload,
 			},
 		})
 	}

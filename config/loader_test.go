@@ -13,15 +13,13 @@ func TestLoadConfig_EndpointsFromConfigPaths(t *testing.T) {
 		t.Fatalf("mkdir failed: %v", err)
 	}
 
-	mainConfig := `server:
-  logging:
-    level: "debug"
+	mainConfig := `logging:
+  level: "debug"
 health_check:
   enabled: true
 endpoints:
-  config_paths:
-    - "./endpoints/single.yaml"
-    - "./endpoints/multiple.yaml"
+  - "./endpoints/single.yaml"
+  - "./endpoints/multiple.yaml"
 `
 	singleEndpoint := `path: "/single"
 method: "GET"
@@ -56,8 +54,8 @@ default:
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	if cfg.Server.Port != 8080 {
-		t.Fatalf("expected default port 8080, got %d", cfg.Server.Port)
+	if cfg.Port != 8080 {
+		t.Fatalf("expected default port 8080, got %d", cfg.Port)
 	}
 	if cfg.HealthCheck.Path != "/health" {
 		t.Fatalf("expected default health path /health, got %q", cfg.HealthCheck.Path)

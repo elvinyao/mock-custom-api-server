@@ -103,56 +103,6 @@ func TestMatchGroup_EmptyLogic_DefaultsToAnd(t *testing.T) {
 	}
 }
 
-// ── MatchRulesForStep ─────────────────────────────────────────────────────────
-
-func TestMatchRulesForStep_StepFilter(t *testing.T) {
-	rules := []Rule{
-		{ScenarioStep: "idle", Conditions: []Condition{{Selector: "x", MatchType: "exact", Value: "1"}}, ResponseFile: "a.json"},
-		{ScenarioStep: "active", Conditions: []Condition{{Selector: "x", MatchType: "exact", Value: "1"}}, ResponseFile: "b.json"},
-	}
-	values := map[string]string{"x": "1"}
-
-	rule := MatchRulesForStep(values, rules, "idle")
-	if rule == nil || rule.ResponseFile != "a.json" {
-		t.Errorf("expected a.json for step=idle, got %v", rule)
-	}
-}
-
-func TestMatchRulesForStep_AnyStep_AlwaysMatches(t *testing.T) {
-	rules := []Rule{
-		{ScenarioStep: "any", Conditions: []Condition{}, ResponseFile: "catch.json"},
-	}
-	values := map[string]string{}
-
-	rule := MatchRulesForStep(values, rules, "anything")
-	if rule == nil || rule.ResponseFile != "catch.json" {
-		t.Errorf("expected catch.json for 'any' step, got %v", rule)
-	}
-}
-
-func TestMatchRulesForStep_EmptyStep_AlwaysMatches(t *testing.T) {
-	// Rule without ScenarioStep is not filtered by step
-	rules := []Rule{
-		{ScenarioStep: "", Conditions: []Condition{{Selector: "s", MatchType: "exact", Value: "v"}}, ResponseFile: "open.json"},
-	}
-	values := map[string]string{"s": "v"}
-
-	rule := MatchRulesForStep(values, rules, "random_step")
-	if rule == nil || rule.ResponseFile != "open.json" {
-		t.Errorf("expected open.json for empty step filter, got %v", rule)
-	}
-}
-
-func TestMatchRulesForStep_NoMatch_ReturnsNil(t *testing.T) {
-	rules := []Rule{
-		{ScenarioStep: "idle", Conditions: []Condition{}, ResponseFile: "a.json"},
-	}
-	rule := MatchRulesForStep(map[string]string{}, rules, "active")
-	if rule != nil {
-		t.Error("expected nil when no rules match current step")
-	}
-}
-
 // ── matchCondition "contains" ─────────────────────────────────────────────────
 
 func TestMatchCondition_Contains_True(t *testing.T) {

@@ -30,7 +30,7 @@ func TestWatcher_StartStop(t *testing.T) {
 	// Create a real temp config file so fsnotify can watch it
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 8080\n"), 0644)
 
 	cm := NewConfigManager(cfgFile)
 	w := NewWatcher(cfgFile, cm, noopLogger)
@@ -49,7 +49,7 @@ func TestWatcher_StartStop(t *testing.T) {
 func TestReloadConfig_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 9000\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 9000\n"), 0644)
 
 	cm := NewConfigManager(cfgFile)
 	w := NewWatcher(cfgFile, cm, noopLogger)
@@ -59,15 +59,15 @@ func TestReloadConfig_ValidFile(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("config should be set after reload")
 	}
-	if cfg.Server.Port != 9000 {
-		t.Errorf("Port = %d, want 9000", cfg.Server.Port)
+	if cfg.Port != 9000 {
+		t.Errorf("Port = %d, want 9000", cfg.Port)
 	}
 }
 
 func TestReloadConfig_InvalidFile_KeepsOldConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 7777\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 7777\n"), 0644)
 
 	cm := NewConfigManager(cfgFile)
 	// Load initial good config
@@ -84,8 +84,8 @@ func TestReloadConfig_InvalidFile_KeepsOldConfig(t *testing.T) {
 	if current == nil {
 		t.Fatal("config should not be nil after failed reload")
 	}
-	if current.Server.Port != 7777 {
-		t.Errorf("Port = %d, want 7777 (old config kept)", current.Server.Port)
+	if current.Port != 7777 {
+		t.Errorf("Port = %d, want 7777 (old config kept)", current.Port)
 	}
 }
 
@@ -93,8 +93,7 @@ func TestReloadConfig_WithValidationWarnings(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
 	// Config with empty endpoint path triggers validation warning
-	yaml := `server:
-  port: 8080
+	yaml := `port: 8080
 endpoints:
   - method: "GET"
 `
@@ -136,7 +135,7 @@ func TestWatchEndpointConfigFiles_NilConfig(t *testing.T) {
 func TestWatchWithPolling_StopsOnClose(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgFile, []byte("server:\n  port: 8080\n"), 0644)
+	os.WriteFile(cfgFile, []byte("port: 8080\n"), 0644)
 
 	cm := NewConfigManager(cfgFile)
 	w := NewWatcher(cfgFile, cm, noopLogger)

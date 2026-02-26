@@ -11,7 +11,7 @@ import (
 // ── addEndpoint – nil body still produces 400 (empty path+method) ────────────
 
 func TestAddEndpoint_EmptyBody_400(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	// nil body → empty JSON → path and method empty → 400
 	w := doRequest(r, "POST", "/admin/endpoints", nil)
@@ -23,7 +23,7 @@ func TestAddEndpoint_EmptyBody_400(t *testing.T) {
 // ── listRequests – invalid query params ──────────────────────────────────────
 
 func TestListRequests_InvalidLimit_UsesDefault(t *testing.T) {
-	h, _, rec, _, _ := newTestHandler()
+	h, _, rec, _ := newTestHandler()
 	for i := 0; i < 5; i++ {
 		rec.Record(&recorder.RecordedRequest{
 			Method:         "GET",
@@ -41,7 +41,7 @@ func TestListRequests_InvalidLimit_UsesDefault(t *testing.T) {
 }
 
 func TestListRequests_NegativeLimit_UsesDefault(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/requests?limit=-5", nil)
 	if w.Code != http.StatusOK {
@@ -50,7 +50,7 @@ func TestListRequests_NegativeLimit_UsesDefault(t *testing.T) {
 }
 
 func TestListRequests_InvalidOffset_UsesDefault(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/requests?offset=bad", nil)
 	if w.Code != http.StatusOK {
@@ -59,7 +59,7 @@ func TestListRequests_InvalidOffset_UsesDefault(t *testing.T) {
 }
 
 func TestListRequests_NegativeOffset_UsesDefault(t *testing.T) {
-	h, _, _, _, _ := newTestHandler()
+	h, _, _, _ := newTestHandler()
 	r := setupRouter(h)
 	w := doRequest(r, "GET", "/admin/requests?offset=-1", nil)
 	if w.Code != http.StatusOK {

@@ -1,9 +1,0 @@
-{
-  "order_id": "{{.uuid}}",
-  "session_id": "{{.session_id}}",
-  "status": "cart_ready",
-  "message": "Cart created successfully",
-  "created_at": "{{.timestamp}}",
-  "items": [],
-  "next_action": "POST /api/v1/checkout/payment"
-}

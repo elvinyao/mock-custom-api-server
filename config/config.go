@@ -8,15 +8,6 @@ import (
 // ==================== Main Config ====================
 
 type Config struct {
-	Server              ServerConfig `yaml:"server"               json:"server"`
-	HealthCheck         HealthCheck  `yaml:"health_check"         json:"health_check"`
-	Endpoints           []Endpoint   `yaml:"endpoints"            json:"endpoints"`
-	EndpointConfigPaths []string     `yaml:"-"                    json:"-"`
-}
-
-// ==================== Server Config ====================
-
-type ServerConfig struct {
 	Port              int             `yaml:"port"                json:"port"`
 	HotReload         bool            `yaml:"hot_reload"          json:"hot_reload"`
 	ReloadIntervalSec int             `yaml:"reload_interval_sec" json:"reload_interval_sec"`
@@ -26,6 +17,9 @@ type ServerConfig struct {
 	AdminAPI          AdminAPIConfig  `yaml:"admin_api"           json:"admin_api"`
 	Recording         RecordingConfig `yaml:"recording"           json:"recording"`
 	TLS               TLSConfig       `yaml:"tls"                 json:"tls"`
+	HealthCheck         HealthCheck  `yaml:"health_check"         json:"health_check"`
+	Endpoints           []Endpoint   `yaml:"endpoints"            json:"endpoints"`
+	EndpointConfigPaths []string     `yaml:"-"                    json:"-"`
 }
 
 // TLSConfig holds TLS/HTTPS settings.
@@ -100,9 +94,6 @@ type Endpoint struct {
 	Selectors   []Selector     `yaml:"selectors"   json:"selectors"`
 	Rules       []Rule         `yaml:"rules"       json:"rules"`
 	Default     ResponseConfig `yaml:"default"     json:"default"`
-	// Scenario support
-	Scenario    string `yaml:"scenario,omitempty"     json:"scenario,omitempty"`
-	ScenarioKey string `yaml:"scenario_key,omitempty" json:"scenario_key,omitempty"`
 	// Proxy support
 	Mode  string      `yaml:"mode,omitempty"  json:"mode,omitempty"`
 	Proxy ProxyConfig `yaml:"proxy,omitempty" json:"proxy,omitempty"`
@@ -120,8 +111,6 @@ type Rule struct {
 	ConditionLogic  string           `yaml:"condition_logic,omitempty"  json:"condition_logic,omitempty"`
 	Conditions      []Condition      `yaml:"conditions"                 json:"conditions"`
 	ConditionGroups []ConditionGroup `yaml:"condition_groups,omitempty" json:"condition_groups,omitempty"`
-	ScenarioStep    string           `yaml:"scenario_step,omitempty"    json:"scenario_step,omitempty"`
-	NextStep        string           `yaml:"next_step,omitempty"        json:"next_step,omitempty"`
 	ResponseConfig  `yaml:",inline"  json:",inline"`
 }
 

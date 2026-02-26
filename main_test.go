@@ -25,10 +25,8 @@ func TestBuildExcludePaths_DefaultsWhenEmpty(t *testing.T) {
 
 func TestBuildExcludePaths_UsesConfiguredPaths(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Recording: config.RecordingConfig{
-				ExcludePaths: []string{"/custom1", "/custom2"},
-			},
+		Recording: config.RecordingConfig{
+			ExcludePaths: []string{"/custom1", "/custom2"},
 		},
 	}
 	paths := buildExcludePaths(cfg)

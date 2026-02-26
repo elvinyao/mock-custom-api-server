@@ -1,5 +1,0 @@
-{
-  "session_id": "{{.session_id}}",
-  "current_step": "idle",
-  "message": "No active checkout session"
-}

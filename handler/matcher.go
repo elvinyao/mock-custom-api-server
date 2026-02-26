@@ -30,9 +30,6 @@ type Rule struct {
 	ConditionLogic  string // "and" (default) | "or"
 	Conditions      []Condition
 	ConditionGroups []ConditionGroup
-	// Scenario support
-	ScenarioStep string
-	NextStep     string
 	// Response fields
 	ResponseFile string
 	InlineBody   string
@@ -48,21 +45,6 @@ type Rule struct {
 func MatchRules(values map[string]string, rules []Rule) *Rule {
 	for i := range rules {
 		rule := &rules[i]
-		if matchRule(values, rule) {
-			return rule
-		}
-	}
-	return nil
-}
-
-// MatchRulesForStep finds the first matching rule for the given scenario step
-func MatchRulesForStep(values map[string]string, rules []Rule, currentStep string) *Rule {
-	for i := range rules {
-		rule := &rules[i]
-		// Filter by scenario step
-		if rule.ScenarioStep != "" && rule.ScenarioStep != "any" && rule.ScenarioStep != currentStep {
-			continue
-		}
 		if matchRule(values, rule) {
 			return rule
 		}
