@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Swagger UI — Mock API Server</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    html { box-sizing: border-box; overflow-y: scroll; }
+    body { margin: 0; background: #fafafa; }
+    /* Compact top bar */
+    #top-bar {
+      background: #1f2937;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    #top-bar a {
+      color: #93c5fd;
+      text-decoration: none;
+      font-size: 13px;
+    }
+    #top-bar a:hover { text-decoration: underline; }
+    #top-bar .title { font-weight: 600; font-size: 15px; color: #f9fafb; }
+    #top-bar .sep { color: #6b7280; }
+    #swagger-ui .topbar { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="top-bar">
+  <span class="title">Mock API Server</span>
+  <span class="sep">|</span>
+  <span>Swagger UI</span>
+  <span class="sep">·</span>
+  <a id="admin-link" href="#">Admin Dashboard ↗</a>
+  <span class="sep">·</span>
+  <a id="spec-link" href="#">openapi.json ↗</a>
+</div>
+
+<div id="swagger-ui"></div>
+
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+  // Derive the admin API base from the current URL.
+  // This page is served at: [admin-prefix]/ui/swagger.html
+  // Admin prefix is everything before "/ui/".
+  function getAdminBase() {
+    const path = window.location.pathname;
+    return path.replace(/\/ui\/.*$/, '');
+  }
+
+  const adminBase = getAdminBase();
+  const specUrl  = adminBase + '/openapi.json';
+  const uiUrl    = window.location.origin + adminBase + '/ui/';
+
+  document.getElementById('admin-link').href = uiUrl;
+  document.getElementById('spec-link').href  = specUrl;
+
+  window.onload = function () {
+    SwaggerUIBundle({
+      url: specUrl,
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIBundle.SwaggerUIStandalonePreset,
+      ],
+      plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+      layout: 'BaseLayout',
+      tryItOutEnabled: true,
+      requestInterceptor: function (req) {
+        // Strip trailing slashes from the URL to match Gin routes
+        req.url = req.url.replace(/([^:])\/\/$/, '$1/');
+        return req;
+      },
+    });
+  };
+</script>
+</body>
+</html>

@@ -41,9 +41,13 @@
 
     <!-- ===== ENDPOINTS TAB ===== -->
     <div x-show="activeTab === 'endpoints'">
-      <div class="flex justify-between mb-3">
+      <div class="flex justify-between mb-3 items-center">
         <h2 class="text-lg font-semibold text-gray-800">Registered Endpoints</h2>
-        <button @click="fetchEndpoints()" class="text-sm text-indigo-600 hover:underline">Refresh</button>
+        <div class="flex gap-3 items-center">
+          <a :href="base + '/ui/swagger.html'" target="_blank"
+            class="text-sm text-green-600 hover:underline font-medium">Swagger UI ↗</a>
+          <button @click="fetchEndpoints()" class="text-sm text-indigo-600 hover:underline">Refresh</button>
+        </div>
       </div>
       <div class="bg-white rounded shadow overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 text-sm">

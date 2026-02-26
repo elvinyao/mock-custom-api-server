@@ -118,6 +118,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine, prefix string, auth config.Admin
 
 	// Metrics
 	group.GET("/metrics", h.getMetrics)
+
+	// OpenAPI spec (for Swagger UI)
+	group.GET("/openapi.json", h.getOpenAPISpec)
 }
 
 // getHealth returns server health and uptime
