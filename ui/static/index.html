@@ -112,7 +112,9 @@
                   <span :class="methodColor(req.method)"
                     class="px-2 py-0.5 rounded text-xs font-bold" x-text="req.method"></span>
                 </td>
-                <td class="px-4 py-2 font-mono text-gray-800" x-text="req.path + (req.query ? '?' + req.query : '')"></td>
+                <td class="px-4 py-2 font-mono text-gray-800 max-w-xs">
+                  <span class="block truncate" :title="req.path + (req.query ? '?' + req.query : '')" x-text="req.path + (req.query ? '?' + req.query : '')"></span>
+                </td>
                 <td class="px-4 py-2">
                   <span :class="statusColor(req.response_status)"
                     class="px-2 py-0.5 rounded text-xs font-bold" x-text="req.response_status"></span>
@@ -131,28 +133,43 @@
         </table>
       </div>
 
-      <!-- Request detail panel -->
-      <div x-show="selectedRequest" class="bg-white rounded shadow p-4">
-        <div class="flex justify-between items-center mb-3">
-          <h3 class="font-semibold text-gray-700">Request Detail — <span class="font-mono text-sm" x-text="selectedRequest && selectedRequest.id"></span></h3>
-          <button @click="selectedRequest = null" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+    </div>
+
+    <!-- ===== REQUEST INSPECT MODAL ===== -->
+    <div
+      x-show="showModal"
+      x-transition:enter="transition ease-out duration-150"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-100"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      @click.self="showModal = false; selectedRequest = null">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="flex justify-between items-center px-5 py-3 border-b">
+          <div>
+            <h3 class="font-semibold text-gray-700">Request Detail</h3>
+            <p class="font-mono text-xs text-gray-400 mt-0.5" x-text="selectedRequest && (selectedRequest.method + ' ' + selectedRequest.path + (selectedRequest.query ? '?' + selectedRequest.query : ''))"></p>
+          </div>
+          <button @click="showModal = false; selectedRequest = null" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
-        <div x-show="selectedRequest" class="grid grid-cols-2 gap-4">
+        <div class="overflow-auto p-5 grid grid-cols-2 gap-4 flex-1">
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1">Request Headers</p>
-            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-40 overflow-auto" x-text="JSON.stringify(selectedRequest && selectedRequest.request_headers, null, 2)"></pre>
+            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-48 overflow-auto" x-text="JSON.stringify(selectedRequest && selectedRequest.request_headers, null, 2)"></pre>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1">Response Headers</p>
-            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-40 overflow-auto" x-text="JSON.stringify(selectedRequest && selectedRequest.response_headers, null, 2)"></pre>
+            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-48 overflow-auto" x-text="JSON.stringify(selectedRequest && selectedRequest.response_headers, null, 2)"></pre>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1">Request Body</p>
-            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-48 overflow-auto" x-text="selectedRequest && (selectedRequest.request_body || '(empty)')"></pre>
+            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-56 overflow-auto" x-text="selectedRequest && (selectedRequest.request_body || '(empty)')"></pre>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1">Response Body</p>
-            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-48 overflow-auto" x-text="selectedRequest && (selectedRequest.response_body || '(empty)')"></pre>
+            <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-56 overflow-auto" x-text="selectedRequest && (selectedRequest.response_body || '(empty)')"></pre>
           </div>
         </div>
       </div>
@@ -275,6 +292,7 @@
         requests: [],
         requestsTotal: 0,
         selectedRequest: null,
+        showModal: false,
         scenarios: [],
         metricsData: [],
         uptimeStr: '—',
@@ -356,6 +374,7 @@
           } catch {
             this.selectedRequest = req;
           }
+          this.showModal = true;
         },
 
         async fetchScenarios() {
