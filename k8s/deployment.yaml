@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: mock-api-server
-          image: ghcr.io/elvinyao/mock-custom-api-server:latest
+          image: ghcr.io/elvinyao/mock-api-server:latest
           args: ["-config", "/app/conf/config.yaml"]
           ports:
             - containerPort: 8080

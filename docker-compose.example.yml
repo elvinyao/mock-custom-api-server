@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   mock-api-server:
-    image: ghcr.io/elvinyao/mock-custom-api-server:latest
+    image: ghcr.io/elvinyao/mock-api-server:latest
     container_name: mock-api-server
     expose:
       - "8080"
