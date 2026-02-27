@@ -16,21 +16,21 @@ paths:
           - selector: "order_id"
             match_type: "exact"
             value: "1001"
-        response_file: "./mocks/payment/success.json"
+        response_file: "./conf/mocks/payment/success.json"
         status_code: 200
 
       - conditions:
           - selector: "order_id"
             match_type: "exact"
             value: "1002"
-        response_file: "./mocks/payment/failed.json"
+        response_file: "./conf/mocks/payment/failed.json"
         status_code: 400
 
       - conditions:
           - selector: "order_id"
             match_type: "regex"
             value: "^ERR_[0-9]{4}$"
-        response_file: "./mocks/payment/error_order.json"
+        response_file: "./conf/mocks/payment/error_order.json"
         status_code: 400
 
       - conditions:
@@ -40,14 +40,14 @@ paths:
           - selector: "user_type"
             match_type: "exact"
             value: "premium"
-        response_file: "./mocks/payment/vip_success.json"
+        response_file: "./conf/mocks/payment/vip_success.json"
         status_code: 200
         headers:
           X-VIP-Status: "active"
           X-Priority: "high"
 
     default:
-      response_file: "./mocks/payment/default.json"
+      response_file: "./conf/mocks/payment/default.json"
       status_code: 200
       headers:
         X-Mock-Server: "true"
@@ -69,18 +69,18 @@ paths:
           - selector: "user_type"
             match_type: "exact"
             value: "admin"
-        response_file: "./mocks/user/admin.json"
+        response_file: "./conf/mocks/user/admin.json"
         status_code: 200
 
       - conditions:
           - selector: "user_id"
             match_type: "range"
             value: "[1, 100]"
-        response_file: "./mocks/user/test_user.json"
+        response_file: "./conf/mocks/user/test_user.json"
         status_code: 200
 
     default:
-      response_file: "./mocks/user/guest.json"
+      response_file: "./conf/mocks/user/guest.json"
       status_code: 200
 
   - path: "/api/v1/order/:order_id"
@@ -95,7 +95,7 @@ paths:
     rules: []
 
     default:
-      response_file: "./mocks/order/detail_template.json"
+      response_file: "./conf/mocks/order/detail_template.json"
       status_code: 200
       template:
         enabled: true
@@ -115,13 +115,13 @@ paths:
       random_responses:
         enabled: true
         files:
-          - file: "./mocks/random/success.json"
+          - file: "./conf/mocks/random/success.json"
             weight: 70
             status_code: 200
-          - file: "./mocks/random/error.json"
+          - file: "./conf/mocks/random/error.json"
             weight: 20
             status_code: 500
-          - file: "./mocks/random/timeout.json"
+          - file: "./conf/mocks/random/timeout.json"
             weight: 10
             status_code: 504
             delay_ms: 3000

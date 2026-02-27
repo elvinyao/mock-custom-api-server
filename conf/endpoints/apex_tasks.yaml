@@ -15,12 +15,12 @@ paths:
           - selector: "auth"
             match_type: "exact"
             value: ""
-        response_file: "./mocks/apex/unauthorized.json"
+        response_file: "./conf/mocks/apex/unauthorized.json"
         status_code: 401
 
       # Default: return task list
       - conditions: []
-        response_file: "./mocks/apex/immediate_list.json"
+        response_file: "./conf/mocks/apex/immediate_list.json"
         status_code: 200
 
       # ============================================================
@@ -40,11 +40,11 @@ paths:
           - selector: "auth"
             match_type: "exact"
             value: ""
-        response_file: "./mocks/apex/unauthorized.json"
+        response_file: "./conf/mocks/apex/unauthorized.json"
         status_code: 401
 
       - conditions: []
-        response_file: "./mocks/apex/timing_list.json"
+        response_file: "./conf/mocks/apex/timing_list.json"
         status_code: 200
 
       # ============================================================
@@ -68,7 +68,7 @@ paths:
           - selector: "task_id"
             match_type: "exact"
             value: ""
-        response_file: "./mocks/apex/report_bad_request.json"
+        response_file: "./conf/mocks/apex/report_bad_request.json"
         status_code: 400
 
       # Success report
@@ -76,7 +76,7 @@ paths:
           - selector: "status"
             match_type: "exact"
             value: "success"
-        response_file: "./mocks/apex/report_accepted.json"
+        response_file: "./conf/mocks/apex/report_accepted.json"
         status_code: 200
 
       # Failure report
@@ -84,10 +84,10 @@ paths:
           - selector: "status"
             match_type: "exact"
             value: "failure"
-        response_file: "./mocks/apex/report_accepted.json"
+        response_file: "./conf/mocks/apex/report_accepted.json"
         status_code: 200
 
       # Default fallback
       - conditions: []
-        response_file: "./mocks/apex/report_accepted.json"
+        response_file: "./conf/mocks/apex/report_accepted.json"
         status_code: 200

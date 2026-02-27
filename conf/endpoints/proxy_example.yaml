@@ -62,5 +62,5 @@ endpoints:
       fallback_on_error: true     # if upstream fails, use rules/default below
     rules: []
     default:
-      response_file: "./mocks/proxy_fallback/posts_fallback.json"
+      response_file: "./conf/mocks/proxy_fallback/posts_fallback.json"
       status_code: 200

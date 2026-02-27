@@ -1,0 +1,81 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+
+generatorOptions:
+  # Disable the hash suffix (e.g. mock-server-config-abc123) so that
+  # deployment.yaml can reference ConfigMap names directly without updates.
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  # ── conf/config.yaml ───────────────────────────────────────────────────────
+  - name: mock-server-config
+    files:
+      - config.yaml=../conf/config.yaml
+
+  # ── conf/endpoints/ ────────────────────────────────────────────────────────
+  - name: mock-server-endpoints
+    files:
+      - holiday.yaml=../conf/endpoints/holiday.yaml
+      - business_apis.yaml=../conf/endpoints/business_apis.yaml
+      - apex_tasks.yaml=../conf/endpoints/apex_tasks.yaml
+      - proxy_example.yaml=../conf/endpoints/proxy_example.yaml
+      - confluence_jira.yaml=../conf/endpoints/confluence_jira.yaml
+
+  # ── conf/mocks/ (one ConfigMap per subdirectory) ───────────────────────────
+  - name: mock-server-mocks-errors
+    files:
+      - not_found.json=../conf/mocks/errors/not_found.json
+      - internal_error.json=../conf/mocks/errors/internal_error.json
+
+  - name: mock-server-mocks-holiday
+    files:
+      - is_holiday_false.json=../conf/mocks/holiday/is_holiday_false.json
+      - is_holiday_true.json=../conf/mocks/holiday/is_holiday_true.json
+
+  - name: mock-server-mocks-payment
+    files:
+      - success.json=../conf/mocks/payment/success.json
+      - failed.json=../conf/mocks/payment/failed.json
+      - error_order.json=../conf/mocks/payment/error_order.json
+      - vip_success.json=../conf/mocks/payment/vip_success.json
+      - default.json=../conf/mocks/payment/default.json
+
+  - name: mock-server-mocks-user
+    files:
+      - admin.json=../conf/mocks/user/admin.json
+      - test_user.json=../conf/mocks/user/test_user.json
+      - guest.json=../conf/mocks/user/guest.json
+
+  - name: mock-server-mocks-order
+    files:
+      - detail_template.json=../conf/mocks/order/detail_template.json
+
+  - name: mock-server-mocks-random
+    files:
+      - success.json=../conf/mocks/random/success.json
+      - error.json=../conf/mocks/random/error.json
+      - timeout.json=../conf/mocks/random/timeout.json
+
+  - name: mock-server-mocks-apex
+    files:
+      - immediate_list.json=../conf/mocks/apex/immediate_list.json
+      - timing_list.json=../conf/mocks/apex/timing_list.json
+      - report_accepted.json=../conf/mocks/apex/report_accepted.json
+      - report_bad_request.json=../conf/mocks/apex/report_bad_request.json
+      - unauthorized.json=../conf/mocks/apex/unauthorized.json
+
+  - name: mock-server-mocks-confluence
+    files:
+      - success.json=../conf/mocks/confluence/success.json
+
+  - name: mock-server-mocks-jira
+    files:
+      - success.json=../conf/mocks/jira/success.json
+
+  - name: mock-server-mocks-proxy-fallback
+    files:
+      - posts_fallback.json=../conf/mocks/proxy_fallback/posts_fallback.json
+      - user_fallback.json=../conf/mocks/proxy_fallback/user_fallback.json

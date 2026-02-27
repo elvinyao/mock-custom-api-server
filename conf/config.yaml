@@ -10,8 +10,8 @@ logging:
 error_handling:
   show_details: true
   custom_error_responses:
-    404: "./mocks/errors/not_found.json"
-    500: "./mocks/errors/internal_error.json"
+    404: "./conf/mocks/errors/not_found.json"
+    500: "./conf/mocks/errors/internal_error.json"
 
 cors:
   enabled: true
@@ -43,8 +43,8 @@ health_check:
   path: "/health"
 
 endpoints:
-  - "./config/endpoints/holiday.yaml"
-  - "./config/endpoints/business_apis.yaml"
-  - "./config/endpoints/apex_tasks.yaml"
-  - "./config/endpoints/proxy_example.yaml"
-  - "./config/endpoints/confluence_jira.yaml"
+  - "./endpoints/holiday.yaml"
+  - "./endpoints/business_apis.yaml"
+  - "./endpoints/apex_tasks.yaml"
+  - "./endpoints/proxy_example.yaml"
+  - "./endpoints/confluence_jira.yaml"

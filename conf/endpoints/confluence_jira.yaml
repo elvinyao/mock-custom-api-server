@@ -5,7 +5,7 @@ endpoints:
     description: "Mock Confluence REST API - accepts all methods and sub-paths, always returns 200"
     default:
       status_code: 200
-      response_file: "./mocks/confluence/success.json"
+      response_file: "./conf/mocks/confluence/success.json"
       content_type: "application/json"
 
   - path: "/jira/rest/api/2/*path"
@@ -13,5 +13,5 @@ endpoints:
     description: "Mock Jira REST API v2 - accepts all methods and sub-paths, always returns 200"
     default:
       status_code: 200
-      response_file: "./mocks/jira/success.json"
+      response_file: "./conf/mocks/jira/success.json"
       content_type: "application/json"

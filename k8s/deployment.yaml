@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-api-server
+  labels:
+    app: mock-api-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-api-server
+  template:
+    metadata:
+      labels:
+        app: mock-api-server
+    spec:
+      containers:
+        - name: mock-api-server
+          image: ghcr.io/elvinyao/mock-custom-api-server:latest
+          args: ["-config", "/app/conf/config.yaml"]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            # ── conf/config.yaml ─────────────────────────────────────────────
+            - name: config
+              mountPath: /app/conf/config.yaml
+              subPath: config.yaml
+            # ── conf/endpoints/ ──────────────────────────────────────────────
+            - name: endpoints
+              mountPath: /app/conf/endpoints
+            # ── conf/mocks/ (one mount per subdirectory) ─────────────────────
+            - name: mocks-errors
+              mountPath: /app/conf/mocks/errors
+            - name: mocks-holiday
+              mountPath: /app/conf/mocks/holiday
+            - name: mocks-payment
+              mountPath: /app/conf/mocks/payment
+            - name: mocks-user
+              mountPath: /app/conf/mocks/user
+            - name: mocks-order
+              mountPath: /app/conf/mocks/order
+            - name: mocks-random
+              mountPath: /app/conf/mocks/random
+            - name: mocks-apex
+              mountPath: /app/conf/mocks/apex
+            - name: mocks-confluence
+              mountPath: /app/conf/mocks/confluence
+            - name: mocks-jira
+              mountPath: /app/conf/mocks/jira
+            - name: mocks-proxy-fallback
+              mountPath: /app/conf/mocks/proxy_fallback
+      volumes:
+        # ── config.yaml ──────────────────────────────────────────────────────
+        - name: config
+          configMap:
+            name: mock-server-config
+        # ── endpoints ────────────────────────────────────────────────────────
+        - name: endpoints
+          configMap:
+            name: mock-server-endpoints
+        # ── mocks (one ConfigMap per subdirectory) ────────────────────────────
+        - name: mocks-errors
+          configMap:
+            name: mock-server-mocks-errors
+        - name: mocks-holiday
+          configMap:
+            name: mock-server-mocks-holiday
+        - name: mocks-payment
+          configMap:
+            name: mock-server-mocks-payment
+        - name: mocks-user
+          configMap:
+            name: mock-server-mocks-user
+        - name: mocks-order
+          configMap:
+            name: mock-server-mocks-order
+        - name: mocks-random
+          configMap:
+            name: mock-server-mocks-random
+        - name: mocks-apex
+          configMap:
+            name: mock-server-mocks-apex
+        - name: mocks-confluence
+          configMap:
+            name: mock-server-mocks-confluence
+        - name: mocks-jira
+          configMap:
+            name: mock-server-mocks-jira
+        - name: mocks-proxy-fallback
+          configMap:
+            name: mock-server-mocks-proxy-fallback
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-api-server
+spec:
+  selector:
+    app: mock-api-server
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080

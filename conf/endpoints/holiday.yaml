@@ -12,23 +12,23 @@ rules:
       - selector: "date"
         match_type: "exact"
         value: "2026-01-01"
-    response_file: "./mocks/holiday/is_holiday_true.json"
+    response_file: "./conf/mocks/holiday/is_holiday_true.json"
     status_code: 200
 
   - conditions:
       - selector: "date"
         match_type: "exact"
         value: "2026-05-01"
-    response_file: "./mocks/holiday/is_holiday_true.json"
+    response_file: "./conf/mocks/holiday/is_holiday_true.json"
     status_code: 200
 
   - conditions:
       - selector: "date"
         match_type: "exact"
         value: "2026-10-01"
-    response_file: "./mocks/holiday/is_holiday_true.json"
+    response_file: "./conf/mocks/holiday/is_holiday_true.json"
     status_code: 200
 
 default:
-  response_file: "./mocks/holiday/is_holiday_false.json"
+  response_file: "./conf/mocks/holiday/is_holiday_false.json"
   status_code: 200
