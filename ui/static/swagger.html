@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Swagger UI — Mock API Server</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <link rel="stylesheet" href="./vendor/swagger-ui.css">
   <style>
     html { box-sizing: border-box; overflow-y: scroll; }
     body { margin: 0; background: #fafafa; }
@@ -45,7 +45,7 @@
 
 <div id="swagger-ui"></div>
 
-<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script src="./vendor/swagger-ui-bundle.js"></script>
 <script>
   // Derive the admin API base from the current URL.
   // This page is served at: [admin-prefix]/ui/swagger.html
@@ -67,9 +67,9 @@
       url: specUrl,
       dom_id: '#swagger-ui',
       deepLinking: true,
+      validatorUrl: null,
       presets: [
         SwaggerUIBundle.presets.apis,
-        SwaggerUIBundle.SwaggerUIStandalonePreset,
       ],
       plugins: [SwaggerUIBundle.plugins.DownloadUrl],
       layout: 'BaseLayout',

@@ -2,7 +2,7 @@ paths:
 
   - path: "/immediate_exec_list"
     method: "GET"
-    escription: "Returns the list of immediate-execution tasks"
+    description: "Returns the list of immediate-execution tasks"
 
     selectors:
       - name: "auth"

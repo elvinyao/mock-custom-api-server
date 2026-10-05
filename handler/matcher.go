@@ -54,29 +54,7 @@ func MatchRules(values map[string]string, rules []Rule) *Rule {
 
 // matchRule checks if all conditions/groups in a rule match according to its logic
 func matchRule(values map[string]string, rule *Rule) bool {
-	logic := strings.ToLower(rule.ConditionLogic)
-	if logic == "" {
-		logic = "and"
-	}
-
-	// Evaluate direct conditions
-	condResult := matchConditions(values, rule.Conditions, logic)
-
-	// If no condition groups, return direct condition result
-	if len(rule.ConditionGroups) == 0 {
-		return condResult
-	}
-
-	// Evaluate condition groups (always AND'd with direct conditions)
-	groupResult := true
-	for _, group := range rule.ConditionGroups {
-		if !matchGroup(values, group) {
-			groupResult = false
-			break
-		}
-	}
-
-	return condResult && groupResult
+	return evaluateRule(values, rule).Matched
 }
 
 // matchConditions evaluates a list of conditions with the given logic ("and" | "or")

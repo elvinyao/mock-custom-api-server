@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -51,7 +50,7 @@ func LoadConfig(path string) (*Config, error) {
 	expanded := expandEnvVars(string(data))
 
 	var raw rawConfig
-	if err := yaml.Unmarshal([]byte(expanded), &raw); err != nil {
+	if err := decodeStrict([]byte(expanded), &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -61,6 +60,7 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	cfg := Config{
+		sourceFile:          path,
 		Port:                raw.Port,
 		HotReload:           raw.HotReload,
 		ReloadIntervalSec:   raw.ReloadIntervalSec,
@@ -73,6 +73,12 @@ func LoadConfig(path string) (*Config, error) {
 		HealthCheck:         raw.HealthCheck,
 		Endpoints:           endpoints,
 		EndpointConfigPaths: endpointConfigPaths,
+	}
+	for i := range cfg.Endpoints {
+		if cfg.Endpoints[i].sourceFile == "" {
+			cfg.Endpoints[i].sourceFile = path
+			cfg.Endpoints[i].sourceIndex = i
+		}
 	}
 
 	// Set defaults
@@ -112,7 +118,7 @@ func parseEndpoints(node yaml.Node, mainConfigPath string) ([]Endpoint, []string
 		}
 		if allChildrenKind(node, yaml.MappingNode) {
 			var endpoints []Endpoint
-			if err := node.Decode(&endpoints); err != nil {
+			if err := decodeStrictNode(node, &endpoints, "endpoints"); err != nil {
 				return nil, nil, fmt.Errorf("failed to parse inline endpoints: %w", err)
 			}
 			return endpoints, nil, nil
@@ -121,13 +127,18 @@ func parseEndpoints(node yaml.Node, mainConfigPath string) ([]Endpoint, []string
 
 	case yaml.MappingNode:
 		var pathsCfg endpointPathsConfig
-		if err := node.Decode(&pathsCfg); err == nil && len(pathsCfg.ConfigPaths) > 0 {
-			return loadEndpointsFromPaths(mainConfigPath, pathsCfg.ConfigPaths)
+		for i := 0; i < len(node.Content); i += 2 {
+			if node.Content[i].Value == "config_paths" {
+				if err := decodeStrictNode(node, &pathsCfg, "endpoints"); err != nil {
+					return nil, nil, fmt.Errorf("invalid endpoints.config_paths: %w", err)
+				}
+				return loadEndpointsFromPaths(mainConfigPath, pathsCfg.ConfigPaths)
+			}
 		}
 
 		// Backward-compatible: support a single inline endpoint mapping.
 		var endpoint Endpoint
-		if err := node.Decode(&endpoint); err != nil {
+		if err := decodeStrictNode(node, &endpoint, "endpoints"); err != nil {
 			return nil, nil, fmt.Errorf("failed to parse endpoints mapping: %w", err)
 		}
 		if !hasEndpointContent(endpoint) {
@@ -168,7 +179,7 @@ func loadEndpointsFromPaths(mainConfigPath string, configPaths []string) ([]Endp
 
 		loaded, err := loadEndpointsFromFile(resolvedPath)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to load endpoint config '%s': %w", trimmed, err)
+			return nil, nil, fmt.Errorf("failed to load endpoint config '%s': %w", resolvedPath, err)
 		}
 		endpoints = append(endpoints, loaded...)
 		resolvedPaths = append(resolvedPaths, resolvedPath)
@@ -177,7 +188,13 @@ func loadEndpointsFromPaths(mainConfigPath string, configPaths []string) ([]Endp
 	return endpoints, resolvedPaths, nil
 }
 
-func loadEndpointsFromFile(path string) ([]Endpoint, error) {
+func loadEndpointsFromFile(path string) (endpoints []Endpoint, err error) {
+	defer func() {
+		for i := range endpoints {
+			endpoints[i].sourceFile = path
+			endpoints[i].sourceIndex = i
+		}
+	}()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -195,7 +212,7 @@ func loadEndpointsFromFile(path string) ([]Endpoint, error) {
 	switch root.Kind {
 	case yaml.SequenceNode:
 		var endpoints []Endpoint
-		if err := root.Decode(&endpoints); err != nil {
+		if err := decodeStrictNode(*root, &endpoints, "endpoints"); err != nil {
 			return nil, fmt.Errorf("invalid endpoints sequence: %w", err)
 		}
 		if len(endpoints) == 0 {
@@ -205,7 +222,7 @@ func loadEndpointsFromFile(path string) ([]Endpoint, error) {
 
 	case yaml.MappingNode:
 		var fileCfg endpointFileConfig
-		if err := root.Decode(&fileCfg); err != nil {
+		if err := decodeStrictNode(*root, &fileCfg, ""); err != nil {
 			return nil, fmt.Errorf("invalid endpoint config mapping: %w", err)
 		}
 
@@ -244,94 +261,6 @@ func hasEndpointContent(ep Endpoint) bool {
 		ep.Default.RandomResponses != nil
 }
 
-// ValidateConfig validates the configuration and returns warnings
-func ValidateConfig(cfg *Config) []string {
-	var warnings []string
-
-	// Validate endpoints
-	for i, ep := range cfg.Endpoints {
-		// Check path
-		if ep.Path == "" {
-			warnings = append(warnings, fmt.Sprintf("endpoint[%d]: path is empty", i))
-		}
-
-		// Check method
-		if ep.Method == "" {
-			warnings = append(warnings, fmt.Sprintf("endpoint[%d]: method is empty", i))
-		}
-
-		// Validate selectors
-		selectorNames := make(map[string]bool)
-		for j, sel := range ep.Selectors {
-			if sel.Name == "" {
-				warnings = append(warnings, fmt.Sprintf("endpoint[%d].selector[%d]: name is empty", i, j))
-			}
-			if selectorNames[sel.Name] {
-				warnings = append(warnings, fmt.Sprintf("endpoint[%d].selector[%d]: duplicate name '%s'", i, j, sel.Name))
-			}
-			selectorNames[sel.Name] = true
-
-			if !isValidSelectorType(sel.Type) {
-				warnings = append(warnings, fmt.Sprintf("endpoint[%d].selector[%d]: invalid type '%s'", i, j, sel.Type))
-			}
-		}
-
-		// Validate rules
-		for j, rule := range ep.Rules {
-			for k, cond := range rule.Conditions {
-				// Check if selector exists
-				if !selectorNames[cond.Selector] {
-					warnings = append(warnings, fmt.Sprintf("endpoint[%d].rule[%d].condition[%d]: unknown selector '%s'", i, j, k, cond.Selector))
-				}
-
-				// Validate match type
-				if !isValidMatchType(cond.MatchType) {
-					warnings = append(warnings, fmt.Sprintf("endpoint[%d].rule[%d].condition[%d]: invalid match_type '%s'", i, j, k, cond.MatchType))
-				}
-
-				// Validate regex patterns
-				if cond.MatchType == "regex" {
-					if _, err := regexp.Compile(cond.Value); err != nil {
-						warnings = append(warnings, fmt.Sprintf("endpoint[%d].rule[%d].condition[%d]: invalid regex '%s': %v", i, j, k, cond.Value, err))
-					}
-				}
-			}
-
-			// Check response file exists
-			if rule.ResponseFile != "" {
-				if _, err := os.Stat(rule.ResponseFile); os.IsNotExist(err) {
-					warnings = append(warnings, fmt.Sprintf("endpoint[%d].rule[%d]: response_file not found: %s", i, j, rule.ResponseFile))
-				}
-			}
-		}
-
-		// Check default response file
-		if ep.Default.ResponseFile != "" {
-			if _, err := os.Stat(ep.Default.ResponseFile); os.IsNotExist(err) {
-				warnings = append(warnings, fmt.Sprintf("endpoint[%d].default: response_file not found: %s", i, ep.Default.ResponseFile))
-			}
-		}
-
-		// Check random response files
-		if ep.Default.RandomResponses != nil && ep.Default.RandomResponses.Enabled {
-			for j, rr := range ep.Default.RandomResponses.Files {
-				if _, err := os.Stat(rr.File); os.IsNotExist(err) {
-					warnings = append(warnings, fmt.Sprintf("endpoint[%d].default.random_responses[%d]: file not found: %s", i, j, rr.File))
-				}
-			}
-		}
-	}
-
-	// Check custom error response files
-	for code, file := range cfg.ErrorHandling.CustomErrorResponses {
-		if _, err := os.Stat(file); os.IsNotExist(err) {
-			warnings = append(warnings, fmt.Sprintf("error_handling.custom_error_responses[%d]: file not found: %s", code, file))
-		}
-	}
-
-	return warnings
-}
-
 func isValidSelectorType(t string) bool {
 	switch strings.ToLower(t) {
 	case "body", "header", "query", "path":
@@ -343,7 +272,7 @@ func isValidSelectorType(t string) bool {
 
 func isValidMatchType(t string) bool {
 	switch strings.ToLower(t) {
-	case "exact", "prefix", "suffix", "regex", "range":
+	case "exact", "prefix", "suffix", "regex", "range", "contains":
 		return true
 	default:
 		return false

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -40,7 +41,7 @@ func (h *Handler) ProxyRequest(c *gin.Context, ep config.Endpoint) bool {
 
 	targetURL, err := url.Parse(cfg.Target)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("invalid proxy target: %v", err)})
+		writeProxyError(c, http.StatusBadGateway, fmt.Errorf("invalid proxy target: %w", err))
 		return true
 	}
 
@@ -66,7 +67,12 @@ func (h *Handler) ProxyRequest(c *gin.Context, ep config.Endpoint) bool {
 	// Read request body
 	var reqBodyBytes []byte
 	if c.Request.Body != nil {
-		reqBodyBytes, _ = io.ReadAll(c.Request.Body)
+		reqBodyBytes, err = io.ReadAll(c.Request.Body)
+		_ = c.Request.Body.Close()
+		if err != nil {
+			writeProxyError(c, http.StatusBadRequest, fmt.Errorf("failed to read request body: %w", err))
+			return true
+		}
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBodyBytes))
 	}
 
@@ -81,7 +87,7 @@ func (h *Handler) ProxyRequest(c *gin.Context, ep config.Endpoint) bool {
 		if cfg.FallbackOnError {
 			return false
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		writeProxyError(c, http.StatusBadGateway, err)
 		return true
 	}
 
@@ -96,34 +102,50 @@ func (h *Handler) ProxyRequest(c *gin.Context, ep config.Endpoint) bool {
 	for k, v := range cfg.Headers {
 		upstreamReq.Header.Set(k, v)
 	}
+	removeHopHeaders(upstreamReq.Header)
 
 	// Fix Host header
 	upstreamReq.Host = targetURL.Host
 
 	// Execute using a shared client with connection pooling
-	client := &http.Client{Timeout: timeout, Transport: sharedTransport}
+	client := &http.Client{
+		Timeout: timeout, Transport: sharedTransport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	resp, err := client.Do(upstreamReq)
 	if err != nil {
 		if cfg.FallbackOnError {
 			return false
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("upstream error: %v", err)})
+		writeProxyError(c, http.StatusBadGateway, fmt.Errorf("upstream error: %w", err))
 		return true
 	}
 	defer resp.Body.Close()
 
 	// Read response body
-	respBodyBytes, _ := io.ReadAll(resp.Body)
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		if cfg.FallbackOnError {
+			return false
+		}
+		writeProxyError(c, http.StatusBadGateway, fmt.Errorf("failed to read upstream response: %w", err))
+		return true
+	}
 
 	// Record stub if configured
 	if cfg.Record && cfg.RecordDir != "" {
-		StubWriter{}.WriteStub(cfg.RecordDir, c.Request, resp, reqBodyBytes, respBodyBytes)
+		if err := (StubWriter{}).WriteStub(cfg.RecordDir, c.Request, resp, reqBodyBytes, respBodyBytes); err != nil {
+			_ = c.Error(fmt.Errorf("record proxy interaction: %w", err))
+			log.Printf("[WARN] Failed to record proxy interaction: %v", err)
+		}
 	}
 
 	// Copy upstream response headers
+	removeHopHeaders(resp.Header)
 	for k, vv := range resp.Header {
+		c.Writer.Header().Del(k)
 		for _, v := range vv {
-			c.Header(k, v)
+			c.Writer.Header().Add(k, v)
 		}
 	}
 
@@ -134,6 +156,23 @@ func (h *Handler) ProxyRequest(c *gin.Context, ep config.Endpoint) bool {
 	}
 	c.Data(resp.StatusCode, contentType, respBodyBytes)
 	return true
+}
+
+func writeProxyError(c *gin.Context, status int, err error) {
+	c.Set("proxy_error", err.Error())
+	c.JSON(status, gin.H{"error": err.Error()})
+}
+
+// Connection-specific headers describe one transport hop, not the proxied message.
+func removeHopHeaders(headers http.Header) {
+	for _, value := range headers.Values("Connection") {
+		for _, name := range strings.Split(value, ",") {
+			headers.Del(strings.TrimSpace(name))
+		}
+	}
+	for _, name := range []string{"Connection", "Proxy-Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization", "TE", "Trailer", "Transfer-Encoding", "Upgrade"} {
+		headers.Del(name)
+	}
 }
 
 // NewReverseProxy creates a standard httputil.ReverseProxy for the given target

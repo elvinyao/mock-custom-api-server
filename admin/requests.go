@@ -3,6 +3,9 @@ package admin
 import (
 	"net/http"
 	"strconv"
+	"strings"
+
+	"mock-api-server/recorder"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,8 +29,36 @@ func (h *Handler) listRequests(c *gin.Context) {
 		offset = 0
 	}
 
-	entries := h.recorder.List(limit, offset)
-	total := h.recorder.Count()
+	// Filter the whole recorder snapshot before applying pagination. Total is the
+	// number of matches from that same snapshot, including older pages.
+	method := c.Query("method")
+	path := strings.ToLower(c.Query("path"))
+	status := strings.ToLower(c.Query("status"))
+	entries := make([]*recorder.RecordedRequest, 0)
+	for _, entry := range h.recorder.List(0, 0) {
+		if method != "" && !strings.EqualFold(method, entry.Method) {
+			continue
+		}
+		if path != "" && !strings.Contains(strings.ToLower(entry.Path), path) {
+			continue
+		}
+		if status != "" {
+			code := strconv.Itoa(entry.ResponseStatus)
+			class := strconv.Itoa(entry.ResponseStatus / 100)
+			if status != code && status != class && status != class+"xx" {
+				continue
+			}
+		}
+		entries = append(entries, entry)
+	}
+	total := len(entries)
+	if offset > total {
+		offset = total
+	}
+	entries = entries[offset:]
+	if limit > 0 && limit < len(entries) {
+		entries = entries[:limit]
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"total":    total,

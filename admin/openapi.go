@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -163,14 +162,6 @@ func (h *Handler) getOpenAPISpec(c *gin.Context) {
 		}
 	}
 
-	// Server URL: same host/port as the mock server itself
-	cfg := h.configManager.GetConfig()
-	port := 8080
-	if cfg != nil && cfg.Port > 0 {
-		port = cfg.Port
-	}
-	serverURL := fmt.Sprintf("http://localhost:%d", port)
-
 	spec := map[string]interface{}{
 		"openapi": "3.0.3",
 		"info": map[string]interface{}{
@@ -179,7 +170,7 @@ func (h *Handler) getOpenAPISpec(c *gin.Context) {
 			"version":     "1.0.0",
 		},
 		"servers": []interface{}{
-			map[string]interface{}{"url": serverURL},
+			map[string]interface{}{"url": "/"},
 		},
 		"paths": paths,
 	}

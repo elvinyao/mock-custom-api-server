@@ -29,9 +29,10 @@ Go 製の汎用ファイル駆動 API モックサーバー。コード変更不
 ```bash
 git clone <repository-url>
 cd mock-api-server
-go mod tidy
-go run main.go                          # デフォルト: ./conf/config.yaml
-go run main.go -config path/to/cfg.yaml # 設定ファイルのパスを明示指定
+bash .agent/run.sh go mod download
+bash .agent/run.sh go run . --check-config -config conf/config.yaml
+AGENT_HTTP_PORT=8080 bash .agent/run.sh go run .
+# 別の設定を使う場合は末尾に -config path/to/cfg.yaml を追加
 ```
 
 モックエンドポイントの動作確認:
@@ -46,6 +47,48 @@ curl -X POST http://localhost:8080/api/v1/payment/status \
 Web UI を開く: `http://localhost:8080/mock-admin/ui/`
 
 Swagger UI を開く: `http://localhost:8080/mock-admin/ui/swagger.html`
+
+Go の実行・ビルド・テストは Docker 内で行います。`.agent/run.sh` は Go 1.26 を使用し、依存関係とビルドキャッシュを Docker ボリュームに保持します。`AGENT_HTTP_PORT` はホストのループバックアドレスからコンテナの 8080 番ポートへの転送を指定します。Docker が使えない場合は、ホスト実行に切り替えず Docker を起動してください。
+
+## ローカル開発とデバッグ
+
+### 設定の検証と反映
+
+`--check-config` はサーバーを起動せず、設定・条件グループ・レスポンス設定・Go テンプレートの構文を検証します。成功時は終了コード 0、不正な設定ではファイル名とフィールドの情報を出して非ゼロで終了します。起動・自動リロード・手動リロードで同じ検証を使用し、リロード失敗時は直前の有効な設定を保持します。
+
+`conf/mocks/` のレスポンスファイルは毎回読み込みます。JSON だけを編集した場合も次のリクエストに反映されます。設定ファイルの監視は親ディレクトリを使うため、エディターが一時ファイルを置き換えて保存する場合にも対応します。ポート、TLS、起動時に組み込まれるミドルウェアの変更はサーバーの再起動が必要です。
+
+モックのパスは起動時・リロード後・実行時追加で同じ規則を使います。静的セグメント、`:param`、末尾の `*rest` の順で具体的なパスを優先し、同じ優先度では定義順に選択します。`/api/*rest` は `/apix` に一致しません。`/org/:id/*rest` では両方のパラメーターを取得できます。モックの末尾スラッシュは同じパスとして扱い、管理 API・UI・ヘルスチェックの登録済みルートを優先します。
+
+### リクエストを調べる
+
+Requests 画面では自動更新を一時停止できます。過去の履歴を追加表示すると更新が一時停止し、表示中の履歴が消えません。フィルターは表示済みのページだけでなく、記録バッファ全体を対象にします。
+
+詳細画面ではセレクター値、条件・グループの判定、選ばれたルールとレスポンスの出所を確認できます。リクエストを cURL としてコピーしたり、同じサーバーへ明示的に再送したりできます。本文が記録されていない、または切り詰められたリクエストは再送できません。ブラウザー管理のヘッダーは再送対象外です。再送は実際の HTTP リクエストなので、プロキシ経由では上流にも送信されます。
+
+### エンドポイントを編集・再利用する
+
+Endpoints 画面で JSON を編集して実行時エンドポイントを追加できます。ファイル由来の定義は複製して編集し、実行時の定義は編集・削除できます。実行時の定義はメモリー内に保持され、サーバー再起動で失われます。
+
+保存して再利用するには YAML としてダウンロードし、`conf/endpoints/` に配置して `conf/config.yaml` の `endpoints` リストに追加してください。ダウンロードはサーバー上のファイルを自動で上書きしません。Swagger UI は同じオリジンの API を使用するため、ホスト側のポート番号を変更しても利用でき、UI の JS/CSS も同梱されています。
+
+### 検証コマンド
+
+```bash
+bash .agent/run.sh go test -race -cover ./...
+bash .agent/run.sh go vet ./...
+bash .agent/run.sh node --test ui/app.test.cjs
+bash .agent/run.sh go build -o mock-api-server .
+```
+
+画面の動作テストだけ Node.js 22 を使います。ランナーが適切な Docker イメージを選択し、フロントエンドのビルドは不要です。通常の push / pull request でも CI が Go と画面の動作テスト、設定検証を実行します。
+
+実際の Chromium で作成・編集・エクスポート・再送・リロード失敗・オフライン Swagger を確認する場合は、次の任意チェックも利用できます。Playwright 1.58.2 とブラウザー依存関係は使い捨ての Node コンテナ内にインストールされます。
+
+```bash
+bash .agent/run.sh go build -o .agent/mock-api-server-linux .
+bash .agent/run.sh node .agent/browser-test.cjs
+```
 
 ---
 

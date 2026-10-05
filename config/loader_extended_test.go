@@ -632,7 +632,7 @@ func TestIsValidMatchType(t *testing.T) {
 		{"suffix", true},
 		{"regex", true},
 		{"range", true},
-		{"contains", false}, // not in the valid list per the implementation
+		{"contains", true},
 		{"fuzzy", false},
 		{"", false},
 	}

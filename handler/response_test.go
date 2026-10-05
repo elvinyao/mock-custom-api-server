@@ -7,6 +7,72 @@ import (
 	"time"
 )
 
+func TestBuild_FixtureEditsAreVisibleImmediately(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "response.json")
+	rb := NewResponseBuilder()
+	for _, body := range []string{`{"v":1}`, `{"v":2}`} {
+		if err := os.WriteFile(f, []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+		res, err := rb.Build(ResponseBuildConfig{ResponseFile: f}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(res.Body) != body {
+			t.Fatalf("body = %q, want edited fixture %q", res.Body, body)
+		}
+	}
+}
+
+func TestBuild_TemplateErrorsAreReturned(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, engine string
+		headers            map[string]string
+	}{
+		{"parse", "{{if}}", "go", nil},
+		{"execute", "{{add .value 1}}", "go", nil},
+		{"missing", "{{.missing}}", "go", nil},
+		{"simple malformed", "{{.value", "simple", nil},
+		{"unknown engine", "body", "typo", nil},
+		{"header", "ok", "go", map[string]string{"X-Test": "{{if}}"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewResponseBuilder().Build(ResponseBuildConfig{InlineBody: tc.body, TemplateEnabled: true, TemplateEngine: tc.engine, Headers: tc.headers}, map[string]string{"value": "text"})
+			if err == nil {
+				t.Fatal("expected template error")
+			}
+		})
+	}
+}
+
+func TestBuild_BuiltinValuesSharedByBodyAndHeaders(t *testing.T) {
+	for _, engine := range []string{"simple", "go"} {
+		t.Run(engine, func(t *testing.T) {
+			res, err := NewResponseBuilder().Build(ResponseBuildConfig{InlineBody: "{{.uuid}}/{{.request_id}}/{{.timestamp}}", TemplateEnabled: true, TemplateEngine: engine, Headers: map[string]string{"X-Identity": "{{.uuid}}/{{.request_id}}/{{.timestamp}}"}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(res.Body) != res.Headers["X-Identity"] {
+				t.Fatalf("body and header used different builtins: %s / %s", res.Body, res.Headers["X-Identity"])
+			}
+		})
+	}
+}
+
+func TestBuild_ReportsSelectedResponseFile(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "selected.json")
+	if err := os.WriteFile(f, []byte("ok"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := NewResponseBuilder().Build(ResponseBuildConfig{ResponseFile: "ignored", RandomResponses: []RandomResponseConfig{{File: f, Weight: 1}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ResponseFile != f {
+		t.Fatalf("result must report actual selected response file %q", f)
+	}
+}
+
 // ── Build ─────────────────────────────────────────────────────────────────────
 
 func TestBuild_NoFile_DefaultStatus200(t *testing.T) {
@@ -92,6 +158,22 @@ func TestBuild_TemplateSimpleEngine(t *testing.T) {
 	}
 	if string(res.Body) != `{"id":"abc123"}` {
 		t.Errorf("Body = %q, want {\"id\":\"abc123\"}", string(res.Body))
+	}
+}
+
+func TestBuild_SimpleLiteralNamesInBodyAndHeaders(t *testing.T) {
+	content := "{{.user-id}}/{{.user.id}}/{{.使用者}}"
+	result, err := NewResponseBuilder().Build(ResponseBuildConfig{
+		InlineBody:      content,
+		Headers:         map[string]string{"X-User": content},
+		TemplateEnabled: true,
+		TemplateEngine:  "simple",
+	}, map[string]string{"user-id": "one", "user.id": "two", "使用者": "three"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Body) != "one/two/three" || result.Headers["X-User"] != "one/two/three" {
+		t.Fatalf("literal selector names not rendered: %#v", result)
 	}
 }
 

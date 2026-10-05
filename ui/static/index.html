@@ -5,13 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mock API Server Dashboard</title>
   <script src="./vendor/tailwind.cdn.js"></script>
+  <script defer src="./app.js"></script>
   <script defer src="./vendor/alpine.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
     pre { white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen" x-data="dashboard()" x-init="init()" x-cloak>
+<body class="bg-gray-100 min-h-screen" x-data="dashboard()" x-cloak>
+  <div x-show="error && !showEndpointEditor && !showModal" role="alert" class="fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-2xl w-[90%] bg-red-50 border border-red-300 text-red-800 rounded shadow-lg p-3 text-sm flex gap-3">
+    <span class="flex-1" x-text="error"></span>
+    <button aria-label="Dismiss error" @click="error = ''">&times;</button>
+  </div>
 
   <!-- Top bar (same style as Swagger UI page) -->
   <header class="bg-gray-800 text-gray-200 flex items-center gap-3 px-5 py-2.5 text-sm font-sans">
@@ -41,13 +46,22 @@
   </nav>
 
   <main class="max-w-7xl mx-auto px-4 py-6">
+    <div x-show="notice" role="status" class="mb-3 p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded text-sm flex gap-3">
+      <span class="flex-1" x-text="notice"></span><button aria-label="Dismiss notification" @click="notice = ''">&times;</button>
+    </div>
 
     <!-- ===== ENDPOINTS TAB ===== -->
     <div x-show="activeTab === 'endpoints'">
       <div class="flex justify-between mb-3 items-center">
         <h2 class="text-lg font-semibold text-gray-800">Registered Endpoints</h2>
-        <button @click="fetchEndpoints()" class="text-sm text-indigo-600 hover:underline">Refresh</button>
+        <div class="flex gap-3 items-center">
+          <button @click="fetchEndpoints()" :disabled="endpointMutationPending" class="text-sm text-indigo-600 hover:underline disabled:opacity-50">Refresh</button>
+          <button @click="openEndpointEditor()" :disabled="!canMutateEndpoints" class="text-sm bg-indigo-600 text-white px-3 py-1.5 rounded disabled:opacity-50">Create endpoint</button>
+        </div>
       </div>
+      <p class="text-xs text-gray-500 mb-3">Runtime endpoints live in memory and disappear after restart. Export YAML to keep them. File endpoints can be duplicated into a runtime draft.</p>
+      <p x-show="endpointMutationPending" role="status" class="text-sm text-indigo-700 mb-3">Saving changes and refreshing endpoints…</p>
+      <p x-show="endpointsStale && !endpointMutationPending" class="text-sm text-amber-800 mb-3">Refresh endpoints to get current indexes before making another change.</p>
       <div class="bg-white rounded shadow overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 text-sm">
           <thead class="bg-gray-50">
@@ -77,6 +91,10 @@
                 <td class="px-4 py-2">
                   <button @click="selectedEndpoint = ep; showEndpointModal = true"
                     class="text-xs text-indigo-600 hover:underline">Detail</button>
+                  <button @click="openEndpointEditor(ep, true)" :disabled="!canMutateEndpoints" class="ml-2 text-xs text-indigo-600 hover:underline disabled:opacity-50">Duplicate</button>
+                  <button x-show="ep.source === 'runtime'" @click="openEndpointEditor(ep)" :disabled="!canMutateEndpoints" class="ml-2 text-xs text-indigo-600 hover:underline disabled:opacity-50">Edit</button>
+                  <button x-show="ep.source === 'runtime'" @click="deleteEndpoint(ep)" :disabled="!canMutateEndpoints" class="ml-2 text-xs text-red-600 hover:underline disabled:opacity-50">Delete</button>
+                  <button @click="exportEndpoint(ep)" class="ml-2 text-xs text-indigo-600 hover:underline">Export YAML</button>
                 </td>
               </tr>
             </template>
@@ -95,24 +113,27 @@
           <span class="ml-2 text-sm text-gray-400" x-text="'(' + filteredRequests.length + ' shown / ' + requestsTotal + ' total)'"></span>
         </h2>
         <div class="flex gap-2">
+          <button @click="toggleRequestsPaused()" class="text-sm text-indigo-600 hover:underline" x-text="requestsPaused ? 'Resume live refresh' : 'Pause live refresh'"></button>
           <button @click="fetchRequests()" class="text-sm text-indigo-600 hover:underline">Refresh</button>
           <button @click="clearRequests()" class="text-sm text-red-600 hover:underline">Clear All</button>
         </div>
       </div>
 
+      <p class="text-xs text-gray-500 mb-3" x-text="requestsPaused ? 'Live refresh paused. Loaded pages stay visible until you refresh or change filters.' : 'Live refresh every 5 seconds. Loading older requests pauses live refresh.'"></p>
+
       <!-- Filter bar -->
       <div class="bg-white rounded shadow p-3 mb-3 flex flex-wrap gap-3 items-center">
         <div class="flex items-center gap-1.5">
           <label class="text-xs text-gray-500 font-medium">Method</label>
-          <select x-model="reqFilter.method" class="text-xs border rounded px-2 py-1 text-gray-700">
+          <select aria-label="Filter method" x-model="reqFilter.method" @change="fetchRequests(true)" class="text-xs border rounded px-2 py-1 text-gray-700">
             <option value="">All</option>
             <option>GET</option><option>POST</option><option>PUT</option>
-            <option>PATCH</option><option>DELETE</option><option>OPTIONS</option>
+            <option>PATCH</option><option>DELETE</option><option>OPTIONS</option><option>HEAD</option>
           </select>
         </div>
         <div class="flex items-center gap-1.5">
           <label class="text-xs text-gray-500 font-medium">Status</label>
-          <select x-model="reqFilter.status" class="text-xs border rounded px-2 py-1 text-gray-700">
+          <select aria-label="Filter status" x-model="reqFilter.status" @change="fetchRequests(true)" class="text-xs border rounded px-2 py-1 text-gray-700">
             <option value="">All</option>
             <option value="2">2xx</option>
             <option value="3">3xx</option>
@@ -122,10 +143,10 @@
         </div>
         <div class="flex items-center gap-1.5 flex-1 min-w-[180px]">
           <label class="text-xs text-gray-500 font-medium">Path</label>
-          <input x-model="reqFilter.path" type="text" placeholder="filter path…"
+          <input aria-label="Filter path" x-model="reqFilter.path" @input.debounce.300ms="fetchRequests(true)" type="text" placeholder="Search all recorded paths…"
             class="text-xs border rounded px-2 py-1 text-gray-700 flex-1" />
         </div>
-        <button @click="reqFilter = { method: '', status: '', path: '' }"
+        <button @click="clearFilters()"
           class="text-xs text-gray-400 hover:text-gray-600">Clear filters</button>
       </div>
 
@@ -172,8 +193,9 @@
       </div>
 
       <!-- Load more -->
-      <div class="flex justify-center" x-show="requests.length < requestsTotal">
+      <div class="flex justify-center" x-show="canLoadMoreRequests">
         <button @click="loadMoreRequests()"
+          :disabled="requestsLoading"
           class="text-sm text-indigo-600 border border-indigo-200 rounded px-4 py-1.5 hover:bg-indigo-50">
           Load more (showing <span x-text="requests.length"></span> of <span x-text="requestsTotal"></span>)
         </button>
@@ -246,6 +268,32 @@
     </div>
 
   </main>
+
+  <!-- Runtime JSON editor. Export preserves every endpoint field through the server YAML encoder. -->
+  <div x-show="showEndpointEditor" role="dialog" aria-modal="true" aria-label="Endpoint editor"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    @keydown.escape.window="if (!endpointMutationPending) showEndpointEditor = false">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center px-5 py-3 border-b">
+        <h3 class="font-semibold text-gray-700" x-text="editingEndpointIndex === null ? 'Create runtime endpoint' : 'Edit runtime endpoint'"></h3>
+        <button aria-label="Close endpoint editor" @click="showEndpointEditor = false" :disabled="endpointMutationPending" class="text-2xl text-gray-500 disabled:opacity-50">&times;</button>
+      </div>
+      <div class="p-5 overflow-auto">
+        <p x-show="error" role="alert" class="text-sm text-red-800 bg-red-50 border border-red-200 rounded p-3 mb-3" x-text="error"></p>
+        <p x-show="endpointEditorStale" class="text-sm text-amber-800 mb-3">The endpoint list changed. Reopen this endpoint before saving. You can still export this draft.</p>
+        <button x-show="endpointsStale" @click="fetchEndpoints()" :disabled="endpointMutationPending" class="text-sm text-indigo-600 mb-3 disabled:opacity-50">Refresh endpoints</button>
+        <p class="text-sm text-amber-800 bg-amber-50 rounded p-3 mb-3">Changes are in memory only and disappear on restart. Export YAML and add it to your endpoint configuration to persist them.</p>
+        <label for="endpoint-json" class="block text-sm font-medium text-gray-700 mb-2">Endpoint JSON — selectors, rules, responses and proxy settings</label>
+        <textarea id="endpoint-json" x-model="endpointJson" :disabled="endpointMutationPending" spellcheck="false" class="w-full h-[45vh] border rounded p-3 text-xs font-mono" aria-label="Endpoint JSON"></textarea>
+        <p class="text-xs text-gray-500 mt-2">A duplicate preserves the complete configuration. Use a distinct path or method: existing definitions win ties, so duplicating a file endpoint with the same path and method does not override it.</p>
+      </div>
+      <div class="flex justify-end gap-3 px-5 py-3 border-t">
+        <button @click="showEndpointEditor = false" :disabled="endpointMutationPending" class="text-sm text-gray-600 disabled:opacity-50">Cancel</button>
+        <button @click="exportEndpoint()" class="text-sm text-indigo-600 border border-indigo-200 rounded px-3 py-2">Export YAML</button>
+        <button @click="saveEndpoint()" :disabled="!canMutateEndpoints || endpointEditorStale" class="text-sm bg-indigo-600 text-white rounded px-3 py-2 disabled:opacity-50">Save runtime endpoint</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== ENDPOINT DETAIL MODAL ===== -->
   <div
@@ -320,17 +368,38 @@
     x-transition:leave-start="opacity-100"
     x-transition:leave-end="opacity-0"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-    @click.self="showModal = false; selectedRequest = null"
-    @keydown.escape.window="showModal = false; selectedRequest = null">
+    @click.self="closeRequest()"
+    @keydown.escape.window="closeRequest()">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
       <div class="flex justify-between items-center px-5 py-3 border-b">
         <div>
           <h3 class="font-semibold text-gray-700">Request Detail</h3>
           <p class="font-mono text-xs text-gray-400 mt-0.5" x-text="selectedRequest && (selectedRequest.method + ' ' + selectedRequest.path + (selectedRequest.query ? '?' + selectedRequest.query : ''))"></p>
         </div>
-        <button @click="showModal = false; selectedRequest = null" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        <button aria-label="Close request details" @click="closeRequest()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+      </div>
+      <div class="px-5 py-3 border-b bg-gray-50">
+        <p x-show="error" role="alert" class="text-sm text-red-800 bg-red-50 border border-red-200 rounded p-3 mb-3" x-text="error"></p>
+        <div class="flex items-center gap-4">
+          <button @click="copyCurl()" class="text-sm text-indigo-600 hover:underline">Copy cURL</button>
+          <button @click="replayRequest()" :disabled="replaying" class="text-sm bg-indigo-600 text-white px-3 py-1.5 rounded" x-text="replaying ? 'Sending…' : 'Replay request'"></button>
+        </div>
+        <p class="mt-2 text-xs text-gray-500">Replay sends this method, query and recorded body to this server using your current browser session. It can change application state. Admin paths, redirects and incomplete bodies are refused.</p>
       </div>
       <div class="overflow-auto p-5 grid grid-cols-2 gap-4 flex-1">
+        <div class="col-span-2" x-show="replayResult">
+          <h4 class="text-sm font-medium text-gray-700 mb-1" x-text="replayResult && ('Replay result — HTTP ' + replayResult.status)"></h4>
+          <pre class="bg-gray-50 p-2 rounded text-xs max-h-48 overflow-auto" x-text="replayResult && replayResult.body"></pre>
+        </div>
+        <div class="col-span-2" x-show="selectedRequest && selectedRequest.match_trace">
+          <h4 class="text-sm font-medium text-gray-700 mb-2">Why this response?</h4>
+          <p class="text-xs text-gray-600" x-text="selectedRequest && selectedRequest.match_trace && ('Selected: ' + selectedRequest.match_trace.selected_rule + ' · Response source: ' + selectedRequest.match_trace.response_source)"></p>
+          <details class="mt-2">
+            <summary class="text-xs text-indigo-600 cursor-pointer">Endpoint, extracted selectors and rule results</summary>
+            <p class="text-xs text-gray-500 my-2">Each condition lists its selector, actual and expected values, match type, and result. Groups show their AND/OR result.</p>
+            <pre class="bg-gray-50 p-2 rounded text-xs max-h-64 overflow-auto" x-text="JSON.stringify(selectedRequest && selectedRequest.match_trace, null, 2)"></pre>
+          </details>
+        </div>
         <div>
           <div class="flex justify-between items-center mb-1">
             <p class="text-xs font-medium text-gray-500">Request Headers</p>
@@ -350,6 +419,7 @@
             <p class="text-xs font-medium text-gray-500">Request Body</p>
             <button @click="copyText(selectedRequest && selectedRequest.request_body)" class="text-xs text-gray-400 hover:text-indigo-600">Copy</button>
           </div>
+          <p class="text-xs text-amber-700 mb-1" x-show="selectedRequest && (!selectedRequest.request_body_recorded || selectedRequest.request_body_truncated)" x-text="selectedRequest && (selectedRequest.request_body_truncated ? 'Body truncated. Replay unavailable.' : 'Body not recorded. Replay unavailable.')"></p>
           <pre class="bg-gray-50 p-2 rounded text-xs text-gray-700 max-h-56 overflow-auto" x-text="selectedRequest && (selectedRequest.request_body || '(empty)')"></pre>
         </div>
         <div>
@@ -363,224 +433,5 @@
     </div>
   </div>
 
-  <script>
-    // Detect admin prefix from current URL path
-    function getAdminBase() {
-      const path = window.location.pathname;
-      return path.replace(/\/ui\/?.*$/, '');
-    }
-
-    function dashboard() {
-      const base = getAdminBase();
-      return {
-        base,
-        tabs: ['endpoints', 'requests', 'metrics', 'config'],
-        activeTab: 'endpoints',
-        endpoints: [],
-        selectedEndpoint: null,
-        showEndpointModal: false,
-        requests: [],
-        requestsTotal: 0,
-        requestsOffset: 0,
-        requestsLimit: 50,
-        reqFilter: { method: '', status: '', path: '' },
-        selectedRequest: null,
-        showModal: false,
-        metricsData: [],
-        uptimeStr: '—',
-        configJson: '',
-        reloadMsg: '',
-
-        get filteredRequests() {
-          return this.requests.filter(r => {
-            if (this.reqFilter.method && r.method !== this.reqFilter.method) return false;
-            if (this.reqFilter.status) {
-              const d = parseInt(this.reqFilter.status);
-              const s = r.response_status;
-              if (d === 2 && (s < 200 || s >= 300)) return false;
-              if (d === 3 && (s < 300 || s >= 400)) return false;
-              if (d === 4 && (s < 400 || s >= 500)) return false;
-              if (d === 5 && s < 500) return false;
-            }
-            if (this.reqFilter.path && !r.path.toLowerCase().includes(this.reqFilter.path.toLowerCase())) return false;
-            return true;
-          });
-        },
-
-        async init() {
-          await this.fetchAll();
-          setInterval(() => this.fetchHealth(), 10000);
-          setInterval(() => {
-            if (this.activeTab === 'requests') this.fetchRequests();
-            else if (this.activeTab === 'metrics') this.fetchMetrics();
-          }, 5000);
-        },
-
-        switchTab(tab) {
-          this.activeTab = tab;
-          if (tab === 'requests') this.fetchRequests();
-          else if (tab === 'endpoints') this.fetchEndpoints();
-          else if (tab === 'metrics') this.fetchMetrics();
-          else if (tab === 'config') this.fetchConfig();
-        },
-
-        async fetchAll() {
-          await Promise.all([
-            this.fetchEndpoints(),
-            this.fetchRequests(),
-            this.fetchMetrics(),
-            this.fetchConfig(),
-            this.fetchHealth(),
-          ]);
-        },
-
-        async fetchHealth() {
-          try {
-            const r = await fetch(`${base}/health`);
-            const d = await r.json();
-            const secs = Math.round(d.uptime_sec || 0);
-            const h = Math.floor(secs / 3600);
-            const m = Math.floor((secs % 3600) / 60);
-            const s = secs % 60;
-            this.uptimeStr = `${h}h ${m}m ${s}s`;
-          } catch {}
-        },
-
-        async fetchEndpoints() {
-          try {
-            const r = await fetch(`${base}/endpoints`);
-            const d = await r.json();
-            this.endpoints = d.endpoints || [];
-          } catch {}
-        },
-
-        async fetchRequests() {
-          try {
-            const r = await fetch(`${base}/requests?limit=${this.requestsLimit}&offset=0`);
-            const d = await r.json();
-            this.requests = d.requests || [];
-            this.requestsTotal = d.total || 0;
-            this.requestsOffset = this.requests.length;
-          } catch {}
-        },
-
-        async loadMoreRequests() {
-          try {
-            const r = await fetch(`${base}/requests?limit=${this.requestsLimit}&offset=${this.requestsOffset}`);
-            const d = await r.json();
-            const more = d.requests || [];
-            this.requests = [...this.requests, ...more];
-            this.requestsTotal = d.total || this.requestsTotal;
-            this.requestsOffset = this.requests.length;
-          } catch {}
-        },
-
-        async clearRequests() {
-          try {
-            await fetch(`${base}/requests`, { method: 'DELETE' });
-            this.requests = [];
-            this.requestsTotal = 0;
-            this.requestsOffset = 0;
-            this.selectedRequest = null;
-          } catch {}
-        },
-
-        async inspectRequest(req) {
-          try {
-            const r = await fetch(`${base}/requests/${req.id}`);
-            this.selectedRequest = await r.json();
-          } catch {
-            this.selectedRequest = req;
-          }
-          this.showModal = true;
-        },
-
-        async fetchMetrics() {
-          try {
-            const r = await fetch(`${base}/metrics`);
-            const d = await r.json();
-            this.metricsData = d.endpoints || [];
-          } catch {}
-        },
-
-        async fetchConfig() {
-          try {
-            const r = await fetch(`${base}/config`);
-            const d = await r.json();
-            this.configJson = JSON.stringify(d, null, 2);
-          } catch {}
-        },
-
-        async triggerReload() {
-          try {
-            const r = await fetch(`${base}/config/reload`, { method: 'POST' });
-            const d = await r.json();
-            this.reloadMsg = d.message || 'Reloaded';
-            await this.fetchConfig();
-            await this.fetchEndpoints();
-            setTimeout(() => this.reloadMsg = '', 4000);
-          } catch (e) {
-            this.reloadMsg = 'Reload failed: ' + e.message;
-          }
-        },
-
-        async copyText(text) {
-          if (!text) return;
-          try { await navigator.clipboard.writeText(text); } catch {}
-        },
-
-        // Simple JSON syntax highlighter — output is safe: all user content is HTML-escaped first.
-        highlightJson(json) {
-          if (!json) return '';
-          const escaped = json
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-          return escaped.replace(
-            /("(?:\\u[0-9a-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
-            match => {
-              let cls = 'text-purple-600';
-              if (/^"/.test(match)) {
-                cls = /:$/.test(match) ? 'text-blue-700 font-medium' : 'text-green-700';
-              } else if (/true|false/.test(match)) {
-                cls = 'text-indigo-500';
-              } else if (match === 'null') {
-                cls = 'text-red-400';
-              }
-              return `<span class="${cls}">${match}</span>`;
-            }
-          );
-        },
-
-        formatTime(ts) {
-          if (!ts) return '—';
-          const d = new Date(ts);
-          const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-          const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          return `${date} ${time}`;
-        },
-
-        methodColor(method) {
-          const m = (method || '').toUpperCase();
-          const map = {
-            GET: 'bg-green-100 text-green-800',
-            POST: 'bg-blue-100 text-blue-800',
-            PUT: 'bg-yellow-100 text-yellow-800',
-            PATCH: 'bg-orange-100 text-orange-800',
-            DELETE: 'bg-red-100 text-red-800',
-            OPTIONS: 'bg-gray-100 text-gray-700',
-          };
-          return map[m] || 'bg-gray-100 text-gray-700';
-        },
-
-        statusColor(status) {
-          if (status >= 500) return 'bg-red-100 text-red-800';
-          if (status >= 400) return 'bg-orange-100 text-orange-800';
-          if (status >= 300) return 'bg-yellow-100 text-yellow-800';
-          return 'bg-green-100 text-green-800';
-        },
-      };
-    }
-  </script>
 </body>
 </html>

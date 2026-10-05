@@ -7,18 +7,21 @@ import (
 
 // RecordedRequest stores information about a recorded HTTP interaction
 type RecordedRequest struct {
-	ID              string            `json:"id"`
-	Timestamp       time.Time         `json:"timestamp"`
-	Method          string            `json:"method"`
-	Path            string            `json:"path"`
-	Query           string            `json:"query,omitempty"`
-	RequestHeaders  map[string]string `json:"request_headers,omitempty"`
-	RequestBody     string            `json:"request_body,omitempty"`
-	ResponseStatus  int               `json:"response_status"`
-	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
-	ResponseBody    string            `json:"response_body,omitempty"`
-	DurationMs      int64             `json:"duration_ms"`
-	MatchedRule     string            `json:"matched_rule,omitempty"`
+	ID                   string            `json:"id"`
+	Timestamp            time.Time         `json:"timestamp"`
+	Method               string            `json:"method"`
+	Path                 string            `json:"path"`
+	Query                string            `json:"query,omitempty"`
+	RequestHeaders       map[string]string `json:"request_headers,omitempty"`
+	RequestBody          string            `json:"request_body,omitempty"`
+	RequestBodyTruncated bool              `json:"request_body_truncated"`
+	RequestBodyRecorded  bool              `json:"request_body_recorded"`
+	ResponseStatus       int               `json:"response_status"`
+	ResponseHeaders      map[string]string `json:"response_headers,omitempty"`
+	ResponseBody         string            `json:"response_body,omitempty"`
+	DurationMs           int64             `json:"duration_ms"`
+	MatchedRule          string            `json:"matched_rule,omitempty"`
+	MatchTrace           any               `json:"match_trace,omitempty"`
 }
 
 // Recorder is a circular buffer that records HTTP interactions

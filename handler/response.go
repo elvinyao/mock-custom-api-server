@@ -1,36 +1,20 @@
 package handler
 
 import (
+	"fmt"
 	"math/rand"
 	"os"
-	"sync"
 	"time"
 
 	"mock-api-server/pkg/template"
 )
 
-// fileCache holds response file contents to avoid repeated disk reads.
-var fileCache sync.Map
-
-// ClearFileCache removes all cached response file contents.
-// Call this after a config reload so updated files are picked up.
-func ClearFileCache() {
-	fileCache.Range(func(k, _ any) bool {
-		fileCache.Delete(k)
-		return true
-	})
-}
+// ClearFileCache is retained for callers that used to invalidate the file cache.
+// Response files are now read on every request so fixture edits appear immediately.
+func ClearFileCache() {}
 
 func readCachedFile(path string) ([]byte, error) {
-	if v, ok := fileCache.Load(path); ok {
-		return v.([]byte), nil
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	fileCache.Store(path, content)
-	return content, nil
+	return os.ReadFile(path)
 }
 
 // ResponseBuilder builds HTTP responses
@@ -43,11 +27,12 @@ func NewResponseBuilder() *ResponseBuilder {
 
 // ResponseResult contains the built response data
 type ResponseResult struct {
-	Body        []byte
-	StatusCode  int
-	Headers     map[string]string
-	DelayMs     int
-	ContentType string
+	ResponseFile string
+	Body         []byte
+	StatusCode   int
+	Headers      map[string]string
+	DelayMs      int
+	ContentType  string
 }
 
 // RandomResponseConfig represents a random response configuration
@@ -84,6 +69,7 @@ func (rb *ResponseBuilder) Build(cfg ResponseBuildConfig, values map[string]stri
 		cfg.StatusCode = rr.StatusCode
 		cfg.DelayMs = rr.DelayMs
 	}
+	result.ResponseFile = cfg.ResponseFile
 
 	// Populate body: prefer response_file, fall back to inline_body
 	if cfg.ResponseFile != "" {
@@ -96,13 +82,18 @@ func (rb *ResponseBuilder) Build(cfg ResponseBuildConfig, values map[string]stri
 		result.Body = []byte(cfg.InlineBody)
 	}
 
-	// Apply template substitution
-	if cfg.TemplateEnabled && len(result.Body) > 0 {
-		engine := cfg.TemplateEngine
-		if engine == "" {
-			engine = "simple"
+	// Share built-in values across body and headers, and propagate template errors.
+	var renderer *template.Renderer
+	if cfg.TemplateEnabled {
+		var err error
+		renderer, err = template.NewRenderer(values, cfg.TemplateEngine)
+		if err != nil {
+			return nil, err
 		}
-		result.Body = template.ReplaceVariablesWithEngine(result.Body, values, engine)
+		result.Body, err = renderer.Render(result.Body)
+		if err != nil {
+			return nil, fmt.Errorf("response body template: %w", err)
+		}
 	}
 
 	// Set status code
@@ -128,11 +119,11 @@ func (rb *ResponseBuilder) Build(cfg ResponseBuildConfig, values map[string]stri
 	for k, v := range cfg.Headers {
 		// Apply template to header values too
 		if cfg.TemplateEnabled {
-			engine := cfg.TemplateEngine
-			if engine == "" {
-				engine = "simple"
+			rendered, err := renderer.Render([]byte(v))
+			if err != nil {
+				return nil, fmt.Errorf("response header %q template: %w", k, err)
 			}
-			v = string(template.ReplaceVariablesWithEngine([]byte(v), values, engine))
+			v = string(rendered)
 		}
 		result.Headers[k] = v
 	}

@@ -7,6 +7,7 @@ import (
 	"mock-api-server/config"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v3"
 )
 
 type endpointEntry struct {
@@ -52,8 +53,8 @@ func (h *Handler) addEndpoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if ep.Path == "" || ep.Method == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path and method are required"})
+	if err := config.ValidateEndpoint(ep); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	h.configManager.AddRuntimeEndpoint(ep)
@@ -78,6 +79,10 @@ func (h *Handler) updateEndpoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := config.ValidateEndpoint(ep); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	if !h.configManager.UpdateRuntimeEndpoint(index, ep) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "runtime endpoint not found"})
@@ -85,6 +90,29 @@ func (h *Handler) updateEndpoint(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Endpoint updated"})
+}
+
+// exportEndpoint returns a complete endpoint document without writing server files.
+func (h *Handler) exportEndpoint(c *gin.Context) {
+	var ep config.Endpoint
+	if err := c.ShouldBindJSON(&ep); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := config.ValidateEndpoint(ep); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	doc := struct {
+		Endpoints []config.Endpoint `yaml:"endpoints"`
+	}{Endpoints: []config.Endpoint{ep}}
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="endpoint.yaml"`)
+	c.Data(http.StatusOK, "application/yaml; charset=utf-8", data)
 }
 
 // deleteEndpoint removes a runtime endpoint by index

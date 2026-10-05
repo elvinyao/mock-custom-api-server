@@ -108,6 +108,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine, prefix string, auth config.Admin
 	// Endpoints management
 	group.GET("/endpoints", h.listEndpoints)
 	group.POST("/endpoints", h.addEndpoint)
+	group.POST("/endpoints/export", h.exportEndpoint)
 	group.PUT("/endpoints/:id", h.updateEndpoint)
 	group.DELETE("/endpoints/:id", h.deleteEndpoint)
 

@@ -1,0 +1,27 @@
+name: Verify changes
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go tests and race detection
+        run: bash .agent/run.sh go test -race ./...
+      - name: Go static checks
+        run: bash .agent/run.sh go vet ./...
+      - name: Dashboard behavior tests
+        run: bash .agent/run.sh node --test ui/app.test.cjs
+      - name: Validate example configuration
+        run: bash .agent/run.sh go run . --check-config -config conf/config.yaml

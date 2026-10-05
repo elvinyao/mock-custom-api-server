@@ -9,83 +9,122 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Watcher watches config file for changes and reloads configuration
+// Watcher watches config directories, including editors' atomic replacements.
 type Watcher struct {
-	configPath string
-	manager    *ConfigManager
-	mu         sync.RWMutex
-	stopCh     chan struct{}
-	logger     *log.Logger
-	// OnReload is called after every successful config reload (e.g. to flush caches).
+	configPath  string
+	manager     *ConfigManager
+	mu          sync.Mutex
+	stopCh      chan struct{}
+	doneCh      chan struct{}
+	stopOnce    sync.Once
+	started     bool
+	intervalSec int
+	logger      *log.Logger
+	// OnReload runs after a valid candidate has been activated.
 	OnReload func()
 }
 
-// NewWatcher creates a new config watcher
 func NewWatcher(configPath string, manager *ConfigManager, logger *log.Logger) *Watcher {
-	return &Watcher{
-		configPath: configPath,
-		manager:    manager,
-		stopCh:     make(chan struct{}),
-		logger:     logger,
+	return &Watcher{configPath: configPath, manager: manager, stopCh: make(chan struct{}), doneCh: make(chan struct{}), logger: logger, intervalSec: 5}
+}
+
+// Start starts one watcher. intervalSec controls polling and failed-load retries.
+func (w *Watcher) Start(intervalSec int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.started || w.stopped() {
+		return
+	}
+	if intervalSec > 0 {
+		w.intervalSec = intervalSec
+	}
+	w.started = true
+	go func() { defer close(w.doneCh); w.watchWithFsnotify() }()
+}
+
+// Stop is idempotent and waits for any in-flight reload to finish.
+func (w *Watcher) Stop() {
+	w.stopOnce.Do(func() { close(w.stopCh) })
+	w.mu.Lock()
+	started := w.started
+	w.mu.Unlock()
+	if started {
+		<-w.doneCh
 	}
 }
 
-// Start starts watching the config file for changes
-func (w *Watcher) Start(intervalSec int) {
-	go w.watchWithFsnotify()
+func (w *Watcher) stopped() bool {
+	select {
+	case <-w.stopCh:
+		return true
+	default:
+		return false
+	}
 }
 
-// Stop stops the watcher
-func (w *Watcher) Stop() {
-	close(w.stopCh)
-}
-
-// watchWithFsnotify uses fsnotify to watch for file changes
 func (w *Watcher) watchWithFsnotify() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		w.logger.Printf("[WARN] Failed to create fsnotify watcher, falling back to polling: %v", err)
-		w.watchWithPolling(5) // fallback to polling
+		w.watchWithPolling(w.intervalSec)
 		return
 	}
 	defer watcher.Close()
-
 	watchedPaths := make(map[string]struct{})
 	if err := w.addWatchPath(watcher, watchedPaths, w.configPath); err != nil {
-		w.logger.Printf("[WARN] Failed to watch config file, falling back to polling: %v", err)
-		w.watchWithPolling(5) // fallback to polling
+		w.logger.Printf("[WARN] Failed to watch config directory, falling back to polling: %v", err)
+		w.watchWithPolling(w.intervalSec)
 		return
 	}
 	w.watchEndpointConfigFiles(watcher, watchedPaths, w.manager.GetConfig())
+	w.logger.Printf("[INFO] Started watching configuration: %s", w.configPath)
 
-	w.logger.Printf("[INFO] Started watching config file: %s", w.configPath)
-
-	// Debounce timer to avoid rapid reloads
-	var debounceTimer *time.Timer
-	debounceDuration := 500 * time.Millisecond
-
+	// Keep debounce handling on this goroutine; no timer callback can outlive Stop.
+	var timer *time.Timer
+	var timerCh <-chan time.Time
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-w.stopCh:
-			w.logger.Println("[INFO] Config watcher stopped")
 			return
-
+		case <-timerCh:
+			timerCh = nil
+			if !w.reloadConfig(watcher, watchedPaths) && !w.stopped() {
+				// A rejected candidate may refer to a new file or directory that
+				// the active config does not watch yet. Retry until it becomes valid.
+				timer.Reset(time.Duration(w.intervalSec) * time.Second)
+				timerCh = timer.C
+			}
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
 			}
-
-			// Only reload on write or create events
-			if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-				// Debounce: cancel previous timer and set a new one
-				if debounceTimer != nil {
-					debounceTimer.Stop()
-				}
-				debounceTimer = time.AfterFunc(debounceDuration, func() {
-					w.reloadConfig(watcher, watchedPaths)
-				})
+			path, err := filepath.Abs(event.Name)
+			if err != nil {
+				continue
 			}
-
+			if _, relevant := watchedPaths[path]; !relevant {
+				continue
+			}
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) == 0 {
+				continue
+			}
+			if timer == nil {
+				timer = time.NewTimer(500 * time.Millisecond)
+			} else {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(500 * time.Millisecond)
+			}
+			timerCh = timer.C
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
@@ -95,17 +134,16 @@ func (w *Watcher) watchWithFsnotify() {
 	}
 }
 
-// watchWithPolling polls for file changes at regular intervals
 func (w *Watcher) watchWithPolling(intervalSec int) {
+	if intervalSec <= 0 {
+		intervalSec = 5
+	}
 	ticker := time.NewTicker(time.Duration(intervalSec) * time.Second)
 	defer ticker.Stop()
-
-	w.logger.Printf("[INFO] Started polling config file every %d seconds: %s", intervalSec, w.configPath)
-
+	w.logger.Printf("[INFO] Started polling config every %d seconds: %s", intervalSec, w.configPath)
 	for {
 		select {
 		case <-w.stopCh:
-			w.logger.Println("[INFO] Config watcher stopped")
 			return
 		case <-ticker.C:
 			w.reloadConfig(nil, nil)
@@ -113,50 +151,55 @@ func (w *Watcher) watchWithPolling(intervalSec int) {
 	}
 }
 
-// reloadConfig reloads the configuration from file
-func (w *Watcher) reloadConfig(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}) {
+func (w *Watcher) reloadConfig(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
-	newCfg, err := LoadConfig(w.configPath)
+	if w.stopped() {
+		return false
+	}
+	newCfg, err := LoadValidatedConfig(w.configPath)
 	if err != nil {
 		w.logger.Printf("[ERROR] Failed to reload config: %v (keeping old config)", err)
-		return
+		return false
 	}
-
-	// Validate new config
-	warnings := ValidateConfig(newCfg)
-	for _, warn := range warnings {
-		w.logger.Printf("[WARN] Config validation: %s", warn)
+	if w.stopped() {
+		return false
 	}
-
-	// Update config
 	w.manager.SetConfig(newCfg)
+	if watcher != nil && watchedPaths != nil {
+		clear(watchedPaths)
+		if err := w.addWatchPath(watcher, watchedPaths, w.configPath); err != nil {
+			w.logger.Printf("[WARN] Failed to watch config directory: %v", err)
+		}
+	}
 	w.watchEndpointConfigFiles(watcher, watchedPaths, newCfg)
 	if w.OnReload != nil {
 		w.OnReload()
 	}
 	w.logger.Printf("[INFO] Configuration reloaded successfully at %s", time.Now().Format(time.RFC3339))
+	return true
 }
 
 func (w *Watcher) watchEndpointConfigFiles(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}, cfg *Config) {
 	if watcher == nil || watchedPaths == nil || cfg == nil {
 		return
 	}
-
 	for _, path := range cfg.EndpointConfigPaths {
 		if err := w.addWatchPath(watcher, watchedPaths, path); err != nil {
-			w.logger.Printf("[WARN] Failed to watch endpoint config file '%s': %v", path, err)
+			w.logger.Printf("[WARN] Failed to watch endpoint config %q: %v", path, err)
 		}
 	}
 }
 
 func (w *Watcher) addWatchPath(watcher *fsnotify.Watcher, watchedPaths map[string]struct{}, path string) error {
-	cleanPath := filepath.Clean(path)
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
 	if _, exists := watchedPaths[cleanPath]; exists {
 		return nil
 	}
-	if err := watcher.Add(cleanPath); err != nil {
+	if err := watcher.Add(filepath.Dir(cleanPath)); err != nil {
 		return err
 	}
 	watchedPaths[cleanPath] = struct{}{}

@@ -23,7 +23,7 @@ func (h *Handler) getConfig(c *gin.Context) {
 // postConfigReload triggers a hot-reload of the configuration
 func (h *Handler) postConfigReload(c *gin.Context) {
 	path := h.configManager.GetConfigPath()
-	cfg, err := config.LoadConfig(path)
+	cfg, err := config.LoadValidatedConfig(path)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

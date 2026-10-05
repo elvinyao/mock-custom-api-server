@@ -8,18 +8,19 @@ import (
 // ==================== Main Config ====================
 
 type Config struct {
-	Port              int             `yaml:"port"                json:"port"`
-	HotReload         bool            `yaml:"hot_reload"          json:"hot_reload"`
-	ReloadIntervalSec int             `yaml:"reload_interval_sec" json:"reload_interval_sec"`
-	Logging           LoggingConfig   `yaml:"logging"             json:"logging"`
-	ErrorHandling     ErrorHandling   `yaml:"error_handling"      json:"error_handling"`
-	CORS              CORSConfig      `yaml:"cors"                json:"cors"`
-	AdminAPI          AdminAPIConfig  `yaml:"admin_api"           json:"admin_api"`
-	Recording         RecordingConfig `yaml:"recording"           json:"recording"`
-	TLS               TLSConfig       `yaml:"tls"                 json:"tls"`
-	HealthCheck         HealthCheck  `yaml:"health_check"         json:"health_check"`
-	Endpoints           []Endpoint   `yaml:"endpoints"            json:"endpoints"`
-	EndpointConfigPaths []string     `yaml:"-"                    json:"-"`
+	sourceFile          string
+	Port                int             `yaml:"port"                json:"port"`
+	HotReload           bool            `yaml:"hot_reload"          json:"hot_reload"`
+	ReloadIntervalSec   int             `yaml:"reload_interval_sec" json:"reload_interval_sec"`
+	Logging             LoggingConfig   `yaml:"logging"             json:"logging"`
+	ErrorHandling       ErrorHandling   `yaml:"error_handling"      json:"error_handling"`
+	CORS                CORSConfig      `yaml:"cors"                json:"cors"`
+	AdminAPI            AdminAPIConfig  `yaml:"admin_api"           json:"admin_api"`
+	Recording           RecordingConfig `yaml:"recording"           json:"recording"`
+	TLS                 TLSConfig       `yaml:"tls"                 json:"tls"`
+	HealthCheck         HealthCheck     `yaml:"health_check"         json:"health_check"`
+	Endpoints           []Endpoint      `yaml:"endpoints"            json:"endpoints"`
+	EndpointConfigPaths []string        `yaml:"-"                    json:"-"`
 }
 
 // TLSConfig holds TLS/HTTPS settings.
@@ -62,10 +63,10 @@ type AdminAPIConfig struct {
 }
 
 type AdminAuth struct {
-	Enabled       bool     `yaml:"enabled"        json:"enabled"`
-	Username      string   `yaml:"username"       json:"username"`
-	Password      string   `yaml:"password"       json:"-"` // never expose password in API
-	AllowedIPs    []string `yaml:"allowed_ips"    json:"allowed_ips,omitempty"`
+	Enabled    bool     `yaml:"enabled"        json:"enabled"`
+	Username   string   `yaml:"username"       json:"username"`
+	Password   string   `yaml:"password"       json:"-"` // never expose password in API
+	AllowedIPs []string `yaml:"allowed_ips"    json:"allowed_ips,omitempty"`
 }
 
 // ==================== Recording Config ====================
@@ -88,6 +89,8 @@ type HealthCheck struct {
 // ==================== Endpoint Config ====================
 
 type Endpoint struct {
+	sourceFile  string
+	sourceIndex int
 	Path        string         `yaml:"path"        json:"path"`
 	Method      string         `yaml:"method"      json:"method"`
 	Description string         `yaml:"description" json:"description"`
@@ -128,7 +131,7 @@ type Condition struct {
 // ==================== Response Config ====================
 
 type ResponseConfig struct {
-	ResponseFile    string            `yaml:"response_file,omitempty"    json:"response_file,omitempty"`
+	ResponseFile string `yaml:"response_file,omitempty"    json:"response_file,omitempty"`
 	// InlineBody allows embedding the response body directly in the YAML config,
 	// avoiding the need for a separate JSON/text file for simple responses.
 	InlineBody      string            `yaml:"inline_body,omitempty"      json:"inline_body,omitempty"`

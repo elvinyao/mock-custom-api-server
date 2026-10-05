@@ -1,0 +1,6 @@
+{
+  "name": "mock-api-dashboard-tests",
+  "private": true,
+  "engines": { "node": "22.x" },
+  "scripts": { "test": "node --test app.test.cjs" }
+}

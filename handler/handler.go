@@ -29,49 +29,20 @@ func NewMockHandler(cfgManager *config.ConfigManager) *MockHandler {
 	}
 }
 
-// RegisterRoutes registers all endpoint routes from config
+// RegisterRoutes dispatches mock routes against the live configuration. Keeping
+// them outside Gin's static tree makes reloads and runtime additions equivalent,
+// and leaves registered admin, UI, and health handlers in charge of their paths.
 func (h *MockHandler) RegisterRoutes(r *gin.Engine) {
-	endpoints := h.configManager.GetAllEndpoints()
-	h.registerEndpoints(r, endpoints)
-
-	// NoRoute catches any path not registered at startup (e.g. added via hot reload
-	// or the runtime endpoint API). handleRequest already calls findEndpoint which
-	// consults the live config, so newly added paths are matched correctly here too.
 	r.NoRoute(h.handleRequest)
-}
-
-func (h *MockHandler) registerEndpoints(r *gin.Engine, endpoints []config.Endpoint) {
-	for _, ep := range endpoints {
-		path := ep.Path
-		method := strings.ToUpper(ep.Method)
-
-		switch method {
-		case "GET":
-			r.GET(path, h.handleRequest)
-		case "POST":
-			r.POST(path, h.handleRequest)
-		case "PUT":
-			r.PUT(path, h.handleRequest)
-		case "DELETE":
-			r.DELETE(path, h.handleRequest)
-		case "PATCH":
-			r.PATCH(path, h.handleRequest)
-		case "OPTIONS":
-			r.OPTIONS(path, h.handleRequest)
-		case "HEAD":
-			r.HEAD(path, h.handleRequest)
-		case "ANY":
-			r.Any(path, h.handleRequest)
-		default:
-			r.Handle(method, path, h.handleRequest)
-		}
-	}
 }
 
 // handleRequest handles incoming requests and matches against config endpoints
 func (h *MockHandler) handleRequest(c *gin.Context) {
+	trace := MatchTrace{Selectors: map[string]string{}, Rules: []RuleTrace{}, SelectedRule: "not_found", ResponseSource: "not_found"}
+	defer func() { c.Set("match_trace", trace) }()
 	cfg := h.configManager.GetConfig()
 	if cfg == nil {
+		trace.SelectedRule, trace.ResponseSource = "error", "error"
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "configuration not loaded"})
 		return
 	}
@@ -86,28 +57,29 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 		h.handleNotFound(c, cfg)
 		return
 	}
+	mode := strings.ToLower(endpoint.Mode)
+	if mode == "" {
+		mode = "mock"
+	}
+	trace.Endpoint = &TraceEndpoint{Path: endpoint.Path, Method: endpoint.Method, Mode: mode}
 
 	// Store path params in context
 	for k, v := range pathParams {
 		c.Params = append(c.Params, gin.Param{Key: k, Value: v})
 	}
 
-	// Proxy mode: forward to upstream, fall back to mock rules only if configured
-	if strings.EqualFold(endpoint.Mode, "proxy") {
-		c.Set("matched_rule", "proxy:"+endpoint.Proxy.Target)
-		c.Set("response_file", "")
-		proxyHandler := proxy.New()
-		if proxyHandler.ProxyRequest(c, *endpoint) {
-			return // handled by proxy (success or non-fallback error)
-		}
-		// fallback_on_error=true and upstream failed: continue to mock rules below
-		c.Set("matched_rule", "proxy:fallback")
-	}
-
 	// Read body for potential reuse
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		bodyBytes = []byte{}
+	var bodyBytes []byte
+	if c.Request.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(c.Request.Body)
+		_ = c.Request.Body.Close()
+		if err != nil {
+			trace.SelectedRule, trace.ResponseSource = "error", "error"
+			c.Set("matched_rule", "error")
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("failed to read request body: %v", err)})
+			return
+		}
 	}
 	// Restore body for selectors
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -124,12 +96,30 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 
 	// Extract values from request
 	values := ExtractValues(c, selectors, pathParams)
+	trace.Selectors = values
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	proxyFallback := false
+	if mode == "proxy" {
+		trace.SelectedRule = "proxy:" + endpoint.Proxy.Target
+		trace.ResponseSource = trace.SelectedRule
+		c.Set("matched_rule", trace.SelectedRule)
+		c.Set("response_file", "")
+		if proxy.New().ProxyRequest(c, *endpoint) {
+			if c.GetString("proxy_error") != "" {
+				trace.ResponseSource = "proxy_error:" + endpoint.Proxy.Target
+			}
+			return
+		}
+		proxyFallback = true
+	}
 
 	// Convert config rules to handler rules
 	rules := convertRules(endpoint.Rules)
 
 	// Match rules
-	matchedRule := MatchRules(values, rules)
+	matchedRule, ruleTraces := MatchRulesWithTrace(values, rules)
+	trace.Rules = ruleTraces
 
 	// Build response config
 	var respCfg ResponseBuildConfig
@@ -187,13 +177,25 @@ func (h *MockHandler) handleRequest(c *gin.Context) {
 
 	// Store matched rule name in context for logging/recording
 	c.Set("matched_rule", matchedRuleName)
-	c.Set("response_file", respCfg.ResponseFile)
+	trace.SelectedRule = matchedRuleName
 
 	// Build response
 	result, err := h.responseBuilder.Build(respCfg, values)
 	if err != nil {
+		trace.ResponseSource = "error"
 		h.handleError(c, cfg, err)
 		return
+	}
+	c.Set("response_file", result.ResponseFile)
+	trace.ResponseSource = "inline"
+	if result.ResponseFile != "" {
+		trace.ResponseSource = "file:" + result.ResponseFile
+		if len(respCfg.RandomResponses) > 0 {
+			trace.ResponseSource = "random_file:" + result.ResponseFile
+		}
+	}
+	if proxyFallback {
+		trace.ResponseSource = "proxy_fallback:" + trace.ResponseSource
 	}
 
 	// Apply delay
@@ -267,61 +269,91 @@ func convertRules(cfgRules []config.Rule) []Rule {
 
 // findEndpoint finds a matching endpoint for the given path and method
 func (h *MockHandler) findEndpoint(endpoints []config.Endpoint, requestPath, method string) (*config.Endpoint, map[string]string) {
+	var selected *config.Endpoint
+	var params map[string]string
 	for i := range endpoints {
 		ep := &endpoints[i]
 
 		// Check method
-		if ep.Method != "ANY" && !strings.EqualFold(ep.Method, method) {
+		if !strings.EqualFold(ep.Method, "ANY") && !strings.EqualFold(ep.Method, method) {
 			continue
 		}
 
 		// Check path (with parameter support)
 		pathParams, matched := matchPath(ep.Path, requestPath)
-		if matched {
-			return ep, pathParams
+		if matched && (selected == nil || moreSpecificPath(ep.Path, selected.Path)) {
+			selected, params = ep, pathParams
 		}
 	}
-	return nil, nil
+	return selected, params
 }
 
 // matchPath matches a request path against an endpoint path pattern.
 // Supports :param segments and catch-all wildcards at the end:
-//   /*name  (Gin-style named catch-all, e.g. /*path)
-//   /*      (unnamed, also accepted)
+//
+//	/*name  (Gin-style named catch-all, e.g. /*path)
+//	/*      (unnamed, also accepted)
 func matchPath(pattern, requestPath string) (map[string]string, bool) {
-	// Detect catch-all wildcard: /*name or /*
-	if idx := strings.Index(pattern, "/*"); idx != -1 {
-		prefix := pattern[:idx]
-		// match if requestPath starts with the prefix (with or without trailing slash)
-		if strings.HasPrefix(requestPath, prefix) {
-			return map[string]string{}, true
-		}
-		return nil, false
-	}
-
 	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
-
-	if len(patternParts) != len(requestParts) {
-		return nil, false
-	}
-
+	requestParts := strings.Split(strings.TrimPrefix(requestPath, "/"), "/")
 	params := make(map[string]string)
-
 	for i, patternPart := range patternParts {
+		if strings.HasPrefix(patternPart, "*") && i == len(patternParts)-1 {
+			if name := strings.TrimPrefix(patternPart, "*"); name != "" {
+				params[name] = ""
+				if i < len(requestParts) {
+					params[name] = "/" + strings.Join(requestParts[i:], "/")
+				}
+			}
+			return params, true
+		}
+		if i >= len(requestParts) {
+			return nil, false
+		}
 		requestPart := requestParts[i]
-
 		if strings.HasPrefix(patternPart, ":") {
-			// This is a path parameter
+			if requestPart == "" {
+				return nil, false
+			}
 			paramName := patternPart[1:]
 			params[paramName] = requestPart
 		} else if patternPart != requestPart {
-			// Static part doesn't match
 			return nil, false
 		}
 	}
-
+	for _, remaining := range requestParts[len(patternParts):] {
+		if remaining != "" {
+			return nil, false
+		}
+	}
 	return params, true
+}
+
+// moreSpecificPath compares left to right: static segments precede parameters,
+// which precede catch-alls. Equal patterns keep their declaration order.
+func moreSpecificPath(left, right string) bool {
+	l := strings.Split(strings.Trim(left, "/"), "/")
+	r := strings.Split(strings.Trim(right, "/"), "/")
+	for i := 0; i < len(l) || i < len(r); i++ {
+		lr, rr := routeSegmentRank(l, i), routeSegmentRank(r, i)
+		if lr != rr {
+			return lr > rr
+		}
+	}
+	return false
+}
+
+func routeSegmentRank(parts []string, index int) int {
+	if index >= len(parts) {
+		return 4
+	}
+	if strings.HasPrefix(parts[index], "*") {
+		return 1
+	}
+	if strings.HasPrefix(parts[index], ":") {
+		return 2
+	}
+	return 3
 }
 
 // handleNotFound handles 404 responses

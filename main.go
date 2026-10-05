@@ -20,6 +20,7 @@ import (
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "conf/config.yaml", "Path to configuration file")
+	checkConfig := flag.Bool("check-config", false, "Validate configuration and exit without starting the server")
 	flag.Parse()
 
 	// Create logger for startup
@@ -27,15 +28,14 @@ func main() {
 
 	// Load configuration
 	startupLogger.Printf("Loading configuration from: %s", *configPath)
-	cfg, err := config.LoadConfig(*configPath)
+	cfg, err := config.LoadValidatedConfig(*configPath)
 	if err != nil {
 		startupLogger.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Validate configuration
-	warnings := config.ValidateConfig(cfg)
-	for _, warn := range warnings {
-		startupLogger.Printf("[WARN] %s", warn)
+	if *checkConfig {
+		startupLogger.Printf("Configuration is valid (%d endpoints)", len(cfg.Endpoints))
+		return
 	}
 
 	// Create config manager
